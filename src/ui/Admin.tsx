@@ -19,7 +19,8 @@ import {
   type AdminAccount,
   type SweepstakeType,
 } from "../db/repo";
-import { ENGINE_META, type Prizes } from "../core";
+import { ENGINE_META, money, toGBP, type Prizes } from "../core";
+import { DryRun } from "./DryRun";
 
 type State =
   | { kind: "loading" }
@@ -176,6 +177,8 @@ function toDraft(t: SweepstakeType): Draft {
 function Catalogue() {
   const [types, setTypes] = useState<SweepstakeType[] | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [dryRunId, setDryRunId] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 2500); };
 
@@ -229,6 +232,12 @@ function Catalogue() {
                 <td><span className="role-pill">{t.engine}</span></td>
                 <td><span className={"role-pill" + (t.active ? " org" : "")}>{t.active ? "active" : "off"}</span></td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  <button className="btn ghost sm" onClick={() => setExpandedId(expandedId === t.id ? null : t.id)}>
+                    {expandedId === t.id ? "Hide" : "View"}
+                  </button>{" "}
+                  {t.engine === "tournament" && (
+                    <button className="btn ghost sm" onClick={() => setDryRunId(dryRunId === t.id ? null : t.id)}>Dry run</button>
+                  )}{" "}
                   <button className="btn ghost sm" onClick={() => setDraft(toDraft(t))}>Edit</button>{" "}
                   <button className="btn ghost sm" onClick={() => toggleActive(t)}>{t.active ? "Deactivate" : "Activate"}</button>
                 </td>
@@ -238,6 +247,16 @@ function Catalogue() {
           </tbody>
         </table>
       )}
+
+      {expandedId && types && (() => {
+        const t = types.find((x) => x.id === expandedId);
+        return t ? <div style={{ marginTop: 12 }}><TypeDetail type={t} /></div> : null;
+      })()}
+
+      {dryRunId && types && (() => {
+        const t = types.find((x) => x.id === dryRunId);
+        return t ? <div style={{ marginTop: 12 }}><DryRun type={t} onClose={() => setDryRunId(null)} /></div> : null;
+      })()}
 
       <div style={{ marginTop: 12 }}>
         {draft ? (
@@ -303,6 +322,77 @@ function TypeEditor({ draft, setDraft, onSave, onCancel }: {
         <button className="btn" onClick={onSave}>Save</button>
         <button className="btn ghost" onClick={onCancel}>Cancel</button>
       </div>
+    </div>
+  );
+}
+
+/* ----------------------- Rich type detail view ------------------------ */
+function PrizeSummary({ type }: { type: SweepstakeType }) {
+  const p = (type.defaultPrizes ?? {}) as any;
+  const fund = 500;
+  const rows: [string, string][] = [];
+  if (type.engine === "tournament") {
+    rows.push(["Daily / game", money(p.perGame ?? 0)]);
+    const m = (k: string, label: string) => { if (p[k]) rows.push([label, `${money(toGBP(p[k], fund))} (${p[k].value}${p[k].mode})`]); };
+    m("groupWinner", "Group winner"); m("groupRunnerUp", "Group runner-up"); m("finalist", "Reaches the final"); m("boot", "Golden Boot");
+  } else if (type.engine === "field_draw") {
+    (p.placePrizes ?? []).forEach((pa: any, i: number) => {
+      const pos = i + 2, suf = pos === 2 ? "nd" : pos === 3 ? "rd" : "th";
+      rows.push([`${pos}${suf} place`, `${money(toGBP(pa, fund))} (${pa.value}${pa.mode})`]);
+    });
+    rows.push(["Winner", "remaining pot"]);
+  }
+  return (
+    <div>
+      {rows.map(([k, v]) => (
+        <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" }}>
+          <span className="muted">{k}</span><span>{v}</span>
+        </div>
+      ))}
+      <div className="muted small" style={{ marginTop: 4 }}>(£ shown at a sample £{fund} fund)</div>
+    </div>
+  );
+}
+
+function TypeDetail({ type }: { type: SweepstakeType }) {
+  const d = (type.data ?? {}) as { groups?: Record<string, string[]>; scorerPool?: string[]; totalGames?: number; field?: string[] };
+  return (
+    <div className="card subtle">
+      <h2 className="h2">{type.name} · details</h2>
+      <p className="p small muted">{type.sport} · engine <b>{type.engine}</b> · {type.active ? "active" : "inactive"}</p>
+
+      {type.engine === "tournament" && (
+        <>
+          <p className="p small">
+            <b>{Object.keys(d.groups ?? {}).length}</b> groups · <b>{d.totalGames ?? 0}</b> games ·{" "}
+            <b>{(d.scorerPool ?? []).length}</b> golden-boot players
+          </p>
+          <div className="groups-grid">
+            {Object.entries(d.groups ?? {}).map(([g, teams]) => (
+              <div className="grp" key={g}>
+                <div className="grp-h">Group {g}</div>
+                {(teams as string[]).map((tm) => <div key={tm} style={{ fontSize: 13, padding: "2px 0" }}>{tm}</div>)}
+              </div>
+            ))}
+          </div>
+          <div className="t-lbl" style={{ marginTop: 14 }}>Golden Boot pool</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+            {(d.scorerPool ?? []).map((s) => <span key={s} className="chip">{s}</span>)}
+          </div>
+        </>
+      )}
+
+      {type.engine === "field_draw" && (
+        <>
+          <p className="p small"><b>{(d.field ?? []).length}</b> entrants</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {(d.field ?? []).map((e) => <span key={e} className="chip">{e}</span>)}
+          </div>
+        </>
+      )}
+
+      <div className="t-lbl" style={{ marginTop: 14 }}>Default prizes</div>
+      <PrizeSummary type={type} />
     </div>
   );
 }

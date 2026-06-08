@@ -5,4 +5,5 @@ export * from "./money";
 export * from "./prng";
 export * from "./dealing";
 export * from "./scoring";
+export * from "./bracket";
 export * from "./engines";
