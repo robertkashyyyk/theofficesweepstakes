@@ -150,6 +150,7 @@ interface Draft {
   data: Record<string, unknown>;
   prizes: Prizes;
   active: boolean;
+  startsAt: string | null;
 }
 
 const emptyPrizes = (): Prizes => ({
@@ -171,6 +172,7 @@ function toDraft(t: SweepstakeType): Draft {
     data: d,
     prizes: t.defaultPrizes,
     active: t.active,
+    startsAt: t.startsAt,
   };
 }
 
@@ -200,6 +202,7 @@ function Catalogue() {
         data: { ...draft.data, totalGames: Number(draft.totalGames) || 0 },
         defaultPrizes: draft.prizes,
         active: draft.active,
+        startsAt: draft.startsAt,
       });
       setDraft(null);
       await load();
@@ -264,7 +267,7 @@ function Catalogue() {
         ) : (
           <button
             className="btn ghost sm"
-            onClick={() => setDraft({ name: "", sport: "Football", engine: "tournament", totalGames: 0, data: { groups: {}, scorerPool: [] }, prizes: emptyPrizes(), active: true })}
+            onClick={() => setDraft({ name: "", sport: "Football", engine: "tournament", totalGames: 0, data: { groups: {}, scorerPool: [] }, prizes: emptyPrizes(), active: true, startsAt: null })}
           >+ New type</button>
         )}
       </div>
@@ -306,6 +309,7 @@ function TypeEditor({ draft, setDraft, onSave, onCancel }: {
           </select>
         </label>
         <label className="fld"><span>Total games</span><input className="input num2" type="number" min="0" value={draft.totalGames} onChange={(e) => set({ totalGames: Number(e.target.value) })} /></label>
+        <label className="fld"><span>Starts (kickoff)</span><input className="input" type="date" value={draft.startsAt ? draft.startsAt.slice(0, 10) : ""} onChange={(e) => set({ startsAt: e.target.value ? `${e.target.value}T12:00:00Z` : null })} /></label>
         <label className="fld"><span>Daily £ / game</span><input className="input num2" type="number" min="0" step="0.5" value={draft.prizes.perGame} onChange={(e) => set({ prizes: { ...draft.prizes, perGame: Number(e.target.value) } })} /></label>
         {prizeRow("Finalist", "finalist")}
         {prizeRow("Group winner", "groupWinner")}
@@ -359,7 +363,10 @@ function TypeDetail({ type }: { type: SweepstakeType }) {
   return (
     <div className="card subtle">
       <h2 className="h2">{type.name} · details</h2>
-      <p className="p small muted">{type.sport} · engine <b>{type.engine}</b> · {type.active ? "active" : "inactive"}</p>
+      <p className="p small muted">
+        {type.sport} · engine <b>{type.engine}</b> · {type.active ? "active" : "inactive"} · starts{" "}
+        <b>{type.startsAt ? new Date(type.startsAt).toLocaleDateString() : "—"}</b>
+      </p>
 
       {type.engine === "tournament" && (
         <>

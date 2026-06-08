@@ -1,12 +1,16 @@
 /* =========================================================================
-   Dry-run simulator (super-admin) — plays a whole tournament IN MEMORY so you
-   can see it fully populated. Nothing is persisted.
+   Dry-run / Test-Event simulator — plays a whole tournament IN MEMORY so it can
+   be seen fully populated. Nothing is persisted.
 
-   It deals ticket books to dummy players via the core dealer, randomly plays
-   every game, simulates the groups + full knockout bracket, fills champion +
-   golden boot, runs `compute()`, and renders the result by REUSING the live
-   sweepstake views (Pot / Tickets / Daily / Board) plus the Bracket display.
-   "Re-roll" re-simulates from a fresh seed.
+   Two callers:
+   - super-admin "Dry run" (default): 20 dummy players, the type's default prizes.
+   - organiser "Test Event" (`organiser`): deals to the organiser's real roster +
+     their fund/prizes, shows a readiness checklist, and is gated to the event's
+     start date (available until kickoff).
+
+   Deals via the core dealer, plays the group stage on real fixtures → table →
+   bracket → champion + golden boot, runs `compute()`, and renders by reusing the
+   live views (Pot / Tickets / Daily / Board) + Group tables + Bracket.
    ========================================================================= */
 import { useMemo, useState } from "react";
 import {
@@ -32,9 +36,22 @@ import { Bracket } from "./Bracket";
 import { GroupTables } from "./GroupTables";
 
 type Tab = "board" | "groups" | "bracket" | "tickets" | "daily";
-const PLAYER_COUNT = 20;
+const DUMMY_COUNT = 20;
 
-export function DryRun({ type, onClose }: { type: SweepstakeType; onClose: () => void }) {
+const prizesConfigured = (p: Prizes) =>
+  (Number(p?.perGame) || 0) > 0 ||
+  [p?.finalist, p?.groupWinner, p?.groupRunnerUp, p?.boot].some((x) => (Number(x?.value) || 0) > 0);
+
+export function DryRun({
+  type, onClose, roster, fund: fundProp, prizes: prizesProp, organiser = false,
+}: {
+  type: SweepstakeType;
+  onClose: () => void;
+  roster?: string[];
+  fund?: number;
+  prizes?: Prizes;
+  organiser?: boolean;
+}) {
   const [nonce, setNonce] = useState(() => Math.floor(Math.random() * 1e9));
   const [tab, setTab] = useState<Tab>("board");
 
@@ -45,19 +62,33 @@ export function DryRun({ type, onClose }: { type: SweepstakeType; onClose: () =>
   const groupCount = Object.keys(groups).length;
   const supported = groupCount === 12; // the bracket sim expects the 12-group WC shape
 
+  const fund = fundProp ?? 500;
+  const prizes: Prizes = prizesProp ?? (type.defaultPrizes as Prizes) ?? DEFAULT_PRIZES;
+  const names = useMemo(
+    () => (organiser
+      ? (roster ?? []).map((n) => n.trim()).filter(Boolean)
+      : Array.from({ length: DUMMY_COUNT }, (_, i) => `Player ${i + 1}`)),
+    [organiser, roster]
+  );
+
+  const started = !!type.startsAt && Date.now() >= new Date(type.startsAt).getTime();
+  const canSim = supported && names.length >= 2 && !started;
+
+  const checks = [
+    { ok: names.length >= 2, label: `Players added (${names.length})`, hint: "Add at least 2 staff names below." },
+    { ok: fund > 0, label: "Prize fund set", hint: "Set a fund above £0." },
+    { ok: prizesConfigured(prizes), label: "Prizes configured", hint: "Set the per-game and prize amounts." },
+    { ok: supported, label: "Event data ready", hint: "The event isn't fully set up by the platform owner yet." },
+  ];
+
   const sim = useMemo(() => {
-    if (!supported) return null;
+    if (!canSim) return null;
     const rng = mulberry32(nonce >>> 0);
-    const fund = 500;
-    const prizes: Prizes = (type.defaultPrizes as Prizes) ?? DEFAULT_PRIZES;
     const rndScore = () => `${Math.floor(rng() * 5)}-${Math.floor(rng() * 5)}`;
 
-    const inputs = Array.from({ length: PLAYER_COUNT }, (_, i) => ({
-      id: `dry-${i}`, name: `Player ${i + 1}`, createdAt: 1_700_000_000_000 + i,
-    }));
+    const inputs = names.map((name, i) => ({ id: `sim-${i}`, name, createdAt: 1_700_000_000_000 + i }));
     const players = dealTickets(inputs, fund, prizes, rng);
 
-    // 1) play the group stage on real fixtures, 2) build the table, 3) feed the bracket.
     const fixtures = groupFixtures(groups);
     const groupGames = fixtures.map((f) => ({ gameIndex: f.index, score: rndScore(), label: `${f.home} v ${f.away}` }));
     const table = groupTable(groups, groupGames);
@@ -66,7 +97,6 @@ export function DryRun({ type, onClose }: { type: SweepstakeType; onClose: () =>
     const { finalists, champion } = deriveFinalChampion(bracket);
     const { groupFirst, groupSecond } = deriveGroupPlacings(table);
 
-    // remaining slots are knockout games (random scores) so Daily/correct-score fills out
     const koGames = Array.from({ length: Math.max(0, totalGames - fixtures.length) }, (_, i) => ({
       gameIndex: fixtures.length + i, score: rndScore(), label: "Knockout",
     }));
@@ -77,29 +107,48 @@ export function DryRun({ type, onClose }: { type: SweepstakeType; onClose: () =>
     const config: Config = { fund, seed: nonce >>> 0, prizes, generated: true };
     const scoring = compute(players, results, config);
     return { results, config, scoring, bracket, table };
-  }, [supported, nonce, groups, scorerPool, totalGames, type.defaultPrizes]);
+  }, [canSim, nonce, names, fund, prizes, groups, scorerPool, totalGames]);
 
   const tabs: [Tab, string][] = [["board", "Leaderboard"], ["groups", "Groups"], ["bracket", "Bracket"], ["tickets", "Tickets"], ["daily", "Daily games"]];
+  const title = organiser ? `Test Event · ${type.name}` : `Dry run · ${type.name}`;
 
   return (
     <div className="card" style={{ borderColor: "var(--blue)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <h2 className="h2" style={{ margin: 0 }}>Dry run · {type.name}</h2>
+        <h2 className="h2" style={{ margin: 0 }}>{title}</h2>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn ghost sm" onClick={() => setNonce(Math.floor(Math.random() * 1e9))}>🎲 Re-roll</button>
+          {canSim && <button className="btn ghost sm" onClick={() => setNonce(Math.floor(Math.random() * 1e9))}>🎲 Re-roll</button>}
           <button className="btn ghost sm" onClick={onClose}>Close</button>
         </div>
       </div>
       <p className="p small muted" style={{ marginTop: 6 }}>
-        A throwaway simulation with {PLAYER_COUNT} dummy players — nothing is saved. Champion:{" "}
-        <b style={{ color: "var(--amber)" }}>{sim?.results.champion || "—"}</b>.
+        {organiser
+          ? "A throwaway simulation with your current roster & settings — nothing is saved."
+          : `A throwaway simulation with ${DUMMY_COUNT} dummy players — nothing is saved.`}
+        {sim && <> Champion: <b style={{ color: "var(--amber)" }}>{sim.results.champion || "—"}</b>.</>}
       </p>
 
-      {!supported ? (
-        <div className="card muted" style={{ marginTop: 8 }}>
-          The dry-run currently supports the 12-group World Cup format. This type has {groupCount} group{groupCount === 1 ? "" : "s"}.
+      {organiser && (
+        <div className="card subtle" style={{ marginTop: 8 }}>
+          <div className="t-lbl">Readiness</div>
+          {checks.map((c) => (
+            <div key={c.label} style={{ display: "flex", gap: 8, alignItems: "baseline", fontSize: 13, padding: "3px 0" }}>
+              <span style={{ color: c.ok ? "var(--cyan)" : "var(--coral)", fontWeight: 800 }}>{c.ok ? "✓" : "✗"}</span>
+              <span>{c.label}{!c.ok && <span className="muted"> — {c.hint}</span>}</span>
+            </div>
+          ))}
         </div>
-      ) : sim ? (
+      )}
+
+      {started ? (
+        <div className="card muted" style={{ marginTop: 8 }}>This event has already kicked off — test mode is closed.</div>
+      ) : !supported ? (
+        <div className="card muted" style={{ marginTop: 8 }}>
+          The simulator currently supports the 12-group World Cup format. This type has {groupCount} group{groupCount === 1 ? "" : "s"}.
+        </div>
+      ) : !sim ? (
+        <div className="card muted" style={{ marginTop: 8 }}>Add at least 2 players to run the simulation.</div>
+      ) : (
         <>
           <div style={{ marginTop: 8 }}>
             <Pot config={sim.config} scoring={sim.scoring} results={sim.results} />
@@ -115,7 +164,7 @@ export function DryRun({ type, onClose }: { type: SweepstakeType; onClose: () =>
           {tab === "tickets" && <Tickets scoring={sim.scoring} config={sim.config} results={sim.results} />}
           {tab === "daily" && <Daily scoring={sim.scoring} config={sim.config} results={sim.results} />}
         </>
-      ) : null}
+      )}
     </div>
   );
 }

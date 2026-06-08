@@ -20,6 +20,8 @@ export interface Bundle {
   engine: string;
   /** Snapshot of the type's data taken at creation (pools/config). */
   typeData: EngineData;
+  /** The catalogue type this sweep came from (for fetching live type info). */
+  typeId: string | null;
 }
 
 /* ---- Phase B: sweepstake-type catalogue ---- */
@@ -31,6 +33,7 @@ export interface SweepstakeType {
   data: EngineData;
   defaultPrizes: Prizes;
   active: boolean;
+  startsAt: string | null;
 }
 
 /* ---- Phase A: tenancy ---- */
@@ -157,6 +160,7 @@ export async function loadBundle(sweepstakeId: string): Promise<Bundle> {
     role,
     engine: sweep.engine ?? "tournament",
     typeData: (sweep.type_data ?? {}) as EngineData,
+    typeId: sweep.type_id ?? null,
   };
 }
 
@@ -193,7 +197,15 @@ function rowToType(r: any): SweepstakeType {
     data: (r.data ?? {}) as EngineData,
     defaultPrizes: r.default_prizes as Prizes,
     active: r.active,
+    startsAt: r.starts_at ?? null,
   };
+}
+
+/** Fetch a single sweepstake type (organiser can read active types via RLS). */
+export async function getSweepstakeType(id: string): Promise<SweepstakeType | null> {
+  const { data, error } = await supabase.from("sweepstake_type").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? rowToType(data) : null;
 }
 
 /** Active types, for the organiser's create-sweepstake picker. */
@@ -228,6 +240,7 @@ export async function upsertSweepstakeType(t: {
   data: EngineData;
   defaultPrizes: Prizes;
   active: boolean;
+  startsAt: string | null;
 }): Promise<void> {
   const row = {
     name: t.name,
@@ -236,6 +249,7 @@ export async function upsertSweepstakeType(t: {
     data: t.data,
     default_prizes: t.defaultPrizes,
     active: t.active,
+    starts_at: t.startsAt,
   };
   const q = t.id
     ? supabase.from("sweepstake_type").update(row).eq("id", t.id)

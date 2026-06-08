@@ -18,6 +18,7 @@ import {
   createAccount,
   generateSweepstake,
   getMyAccount,
+  getSweepstakeType,
   isPlatformAdmin,
   listAccountPeople,
   listSweepstakes,
@@ -30,6 +31,7 @@ import {
   type Bundle,
   type Role,
   type SweepSummary,
+  type SweepstakeType,
 } from "./db/repo";
 import { Board, Daily, Home, OrgManage, Pot, Setup, Tickets } from "./ui/views";
 import { AccountDashboard } from "./ui/AccountAdmin";
@@ -55,6 +57,7 @@ export default function App() {
   const [sweepstakeId, setSweepstakeId] = useState<string | null>(null);
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [bundleLoading, setBundleLoading] = useState(false);
+  const [sweepType, setSweepType] = useState<SweepstakeType | null>(null);
 
   const [tab, setTab] = useState<Tab>("home");
   const [toast, setToast] = useState("");
@@ -161,6 +164,15 @@ export default function App() {
     const poll = setInterval(reload, 25000);
     return () => { supabase.removeChannel(channel); clearInterval(poll); };
   }, [mode, sweepstakeId, tab, reload]);
+
+  /* ---- the catalogue type behind this sweep (for the Test Event) ---- */
+  useEffect(() => {
+    const tid = bundle?.typeId;
+    if (!tid) { setSweepType(null); return; }
+    let cancelled = false;
+    getSweepstakeType(tid).then((t) => { if (!cancelled) setSweepType(t); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [bundle?.typeId]);
 
   const config = bundle?.config ?? EMPTY_CONFIG;
   const players: Player[] = bundle?.players ?? [];
@@ -307,7 +319,7 @@ export default function App() {
           {tab === "org" && role === "organiser" && (
             config.generated
               ? <OrgManage config={config} results={results} players={players} scoring={scoring} actions={actions} flash={flash} />
-              : <Setup config={config} onGenerate={onGenerate} flash={flash} staffNames={staffNames} />
+              : <Setup config={config} onGenerate={onGenerate} flash={flash} staffNames={staffNames} type={sweepType} />
           )}
         </main>
       )}

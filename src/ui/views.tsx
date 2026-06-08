@@ -22,6 +22,8 @@ import {
   type Scoring,
 } from "../core";
 import { GroupTables } from "./GroupTables";
+import { DryRun } from "./DryRun";
+import type { SweepstakeType } from "../db/repo";
 
 const groupOf = (t: string) => coreGroupOf(t, GROUPS);
 
@@ -168,16 +170,20 @@ export function Board({ scoring, results }: { scoring: Scoring; results: Results
 }
 
 /* --------------------------- Setup (organiser) ------------------------- */
-export function Setup({ config, onGenerate, flash, staffNames = [] }: {
+export function Setup({ config, onGenerate, flash, staffNames = [], type }: {
   config: Config;
   onGenerate: (fund: number, prizes: Prizes, names: string[]) => void;
   flash: (m: string) => void;
   staffNames?: string[];
+  type?: SweepstakeType | null;
 }) {
   const [fund, setFund] = useState<number | string>(config.fund || 500);
   const [num, setNum] = useState(20);
   const [names, setNames] = useState<string[]>(Array.from({ length: 20 }, () => ""));
   const [prizes, setPrizes] = useState<Prizes>(config.prizes);
+  const [showTest, setShowTest] = useState(false);
+  const kickoff = type?.startsAt ? new Date(type.startsAt) : null;
+  const started = kickoff ? Date.now() >= kickoff.getTime() : false;
 
   const setCount = (n: number) => {
     n = Math.max(2, Math.min(80, Number(n) || 0));
@@ -277,6 +283,34 @@ export function Setup({ config, onGenerate, flash, staffNames = [] }: {
           ? <p className="p small" style={{ color: "var(--coral)" }}>⚠️ Small prizes commit {money(proj.committed)} — more than the {money(proj.fund)} fund. Trim them or the Winner gets nothing.</p>
           : <p className="p small">In practice the Winner usually gets <b>more</b> than this: any daily game whose score nobody holds rolls back into the jackpot.</p>}
       </div>
+
+      {type && (
+        <div className="card">
+          <h2 className="h2">Test Event</h2>
+          <p className="p small">
+            Simulate the whole event with the names &amp; prizes above — see the tickets, group tables,
+            bracket and payouts, and a checklist of anything still missing. Nothing is saved.
+            {kickoff && <> {started ? <b> The event has kicked off — test mode is closed.</b> : <> Available until kickoff: <b>{kickoff.toLocaleDateString()}</b>.</>}</>}
+          </p>
+          {!started && (
+            <button className="btn ghost" onClick={() => setShowTest((s) => !s)}>
+              {showTest ? "Hide test" : "▶ Run a test event"}
+            </button>
+          )}
+          {showTest && !started && (
+            <div style={{ marginTop: 12 }}>
+              <DryRun
+                type={type}
+                organiser
+                roster={names.filter((n) => n.trim())}
+                fund={Number(fund) || 0}
+                prizes={prizes}
+                onClose={() => setShowTest(false)}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card">
         <h2 className="h2">4 · Generate</h2>
