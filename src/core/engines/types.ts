@@ -9,10 +9,17 @@
    the deterministic maths. Keeping this a thin boundary is what lets the core's
    golden tests stay untouched.
    ========================================================================= */
-import type { Config, Player, Prizes, Projection, Results, Rng, Scoring } from "../types";
+import type { Config, PrizeAmount, Player, Prizes, Projection, Results, Rng, Scoring } from "../types";
 // Reuse the core's DealInput (defined in dealing.ts) rather than redefining it,
 // so core/index.ts can re-export both modules without a name collision.
 import type { DealInput } from "../dealing";
+
+/** Lightweight engine descriptor for the catalogue / pickers / validation. */
+export interface EngineMeta {
+  key: string;
+  label: string;
+  sportDefault: string;
+}
 
 /** Data carried by a `tournament` type (the pools that vary per tournament). */
 export interface TournamentData {
@@ -21,8 +28,41 @@ export interface TournamentData {
   totalGames: number;
 }
 
+/* ---- field_draw engine (draw-one-from-a-field: Grand National, etc.) ---- */
+
+/** Data carried by a `field_draw` type — the pool of entrants. */
+export interface FieldDrawData {
+  field: string[];
+}
+
+/** Prizes for a field_draw sweep. 1st takes the pot remainder (jackpot);
+ *  `placePrizes[i]` is the prize for finishing position i+2 (2nd, 3rd, 4th…). */
+export interface FieldDrawPrizes {
+  placePrizes: PrizeAmount[];
+}
+
+/** One player's drawn entrants. */
+export interface FieldDrawHolding {
+  playerId: string;
+  name: string;
+  entrants: string[];
+}
+
+/** The finishing order, 1st → nth (entrant names). */
+export interface FieldDrawOutcome {
+  finishers: string[];
+}
+
+export interface FieldDrawScore {
+  per: Record<string, { breakdown: Record<string, number>; total: number }>;
+  paid: number;
+  jackpot: number;
+  /** playerId holding the winner (1st), or null if not yet set. */
+  winnerHolder: string | null;
+}
+
 /** Engine-specific data blob (snapshotted onto each sweepstake at creation). */
-export type EngineData = TournamentData | Record<string, unknown>;
+export type EngineData = TournamentData | FieldDrawData | Record<string, unknown>;
 
 /**
  * A deterministic engine. All methods are pure; `data` is the type's snapshot.

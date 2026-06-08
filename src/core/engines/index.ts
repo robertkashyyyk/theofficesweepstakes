@@ -1,21 +1,21 @@
 /* =========================================================================
-   Engine registry. A sweepstake stores its `engine` key; this maps it back to
-   the code. New format = a new engine registered here (+ its own tests).
+   Engine registry. A sweepstake stores its `engine` key; ENGINE_META maps each
+   key to its descriptor (label/sport) for the catalogue picker + validation.
+   Engine LOGIC lives in the per-engine modules and is imported directly by the
+   code paths that run it. New format = a new engine module + its own tests.
    ========================================================================= */
 import { tournament } from "./tournament";
-import type { Engine } from "./types";
+import { drawField, fieldDrawMeta, projectFieldDraw, scoreFieldDraw } from "./field_draw";
+import type { EngineMeta } from "./types";
 
 export * from "./types";
 
-export const ENGINES: Record<string, Engine> = {
-  [tournament.key]: tournament,
+/** Descriptor for every registered engine — drives the /admin engine picker. */
+export const ENGINE_META: Record<string, EngineMeta> = {
+  [tournament.key]: { key: tournament.key, label: tournament.label, sportDefault: tournament.sportDefault },
+  [fieldDrawMeta.key]: fieldDrawMeta,
 };
 
-/** Resolve an engine by key; throws on an unknown key (fail loud, not silent). */
-export function getEngine(key: string): Engine {
-  const e = ENGINES[key];
-  if (!e) throw new Error(`Unknown engine: ${key}`);
-  return e;
-}
-
+// tournament engine object (wraps the core); field_draw native logic.
 export { tournament };
+export { drawField, scoreFieldDraw, projectFieldDraw, fieldDrawMeta };

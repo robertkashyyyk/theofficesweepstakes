@@ -260,6 +260,19 @@ export default function App() {
   /* ---- a single sweepstake ---- */
   if (bundleLoading || !bundle) return <Shell topbar={<TopBar email={session.user.email ?? ""} isAdmin={isAdmin} onBack={backToDashboard} />}><div className="card muted">Loading…</div></Shell>;
 
+  // Only the tournament engine has app screens so far (field_draw etc. are
+  // catalogued but their /app views land in a later phase). Guard, don't crash.
+  if (bundle.engine !== "tournament") {
+    return (
+      <Shell topbar={<TopBar email={session.user.email ?? ""} isAdmin={isAdmin} onBack={backToDashboard} />}>
+        <div className="card muted">
+          <b>{bundle.name}</b> runs the <b>{bundle.engine}</b> format, which isn't playable in the app yet —
+          its screens are coming in a later release. Use <b>← Account</b> to go back.
+        </div>
+      </Shell>
+    );
+  }
+
   const tabs: [Tab, string][] = [["home", "How it works"], ["tickets", "Tickets"], ["daily", "Daily games"], ["board", "Leaderboard"]];
   if (role === "organiser") tabs.push(["org", "Organiser"]);
 

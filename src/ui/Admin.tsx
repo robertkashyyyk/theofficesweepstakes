@@ -19,7 +19,7 @@ import {
   type AdminAccount,
   type SweepstakeType,
 } from "../db/repo";
-import type { Prizes } from "../core";
+import { ENGINE_META, type Prizes } from "../core";
 
 type State =
   | { kind: "loading" }
@@ -283,7 +283,7 @@ function TypeEditor({ draft, setDraft, onSave, onCancel }: {
         <label className="fld"><span>Sport</span><input className="input" value={draft.sport} onChange={(e) => set({ sport: e.target.value })} /></label>
         <label className="fld"><span>Engine</span>
           <select className="input" value={draft.engine} onChange={(e) => set({ engine: e.target.value })}>
-            <option value="tournament">tournament</option>
+            {Object.values(ENGINE_META).map((m) => <option key={m.key} value={m.key}>{m.key}</option>)}
           </select>
         </label>
         <label className="fld"><span>Total games</span><input className="input num2" type="number" min="0" value={draft.totalGames} onChange={(e) => set({ totalGames: Number(e.target.value) })} /></label>

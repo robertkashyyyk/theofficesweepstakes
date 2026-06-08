@@ -4,7 +4,7 @@
    determinism golden tests (which test the core directly) still fully cover it.
    ========================================================================= */
 import { describe, it, expect } from "vitest";
-import { ENGINES, getEngine, tournament } from "../engines";
+import { ENGINE_META, tournament } from "../engines";
 import { dealTickets } from "../dealing";
 import { compute, projection } from "../scoring";
 import { scoreFor } from "../prng";
@@ -15,12 +15,10 @@ import type { Config, Results } from "../types";
 const wcData = { groups: GROUPS, scorerPool: SCORER_POOL, totalGames: TOTAL_GAMES };
 
 describe("engine registry", () => {
-  it("resolves tournament by key", () => {
-    expect(getEngine("tournament")).toBe(tournament);
-    expect(ENGINES.tournament).toBe(tournament);
-  });
-  it("throws loudly on an unknown engine", () => {
-    expect(() => getEngine("field_draw")).toThrow(/Unknown engine/);
+  it("lists both engines in ENGINE_META", () => {
+    expect(Object.keys(ENGINE_META).sort()).toEqual(["field_draw", "tournament"]);
+    expect(ENGINE_META.tournament.key).toBe("tournament");
+    expect(ENGINE_META.field_draw.sportDefault).toBe("Horse racing");
   });
 });
 
