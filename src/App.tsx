@@ -337,35 +337,64 @@ function TopBar({ email, isAdmin, onBack, role }: { email: string; isAdmin: bool
 }
 
 /* --------------------------- Auth view --------------------------------- */
+type AuthMsg = { kind: "error" | "info"; text: string } | null;
+const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+
 function Auth({ flash }: { flash: (m: string) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"in" | "up">("in");
   const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<AuthMsg>(null);
+
+  const switchMode = (m: "in" | "up") => { setMode(m); setMsg(null); };
+
+  const friendlyError = (e: any): string => {
+    const raw = (e?.message || "").toLowerCase();
+    if (raw.includes("invalid login")) return "That email or password isn't right.";
+    if (raw.includes("email not confirmed")) return "Your email isn't confirmed yet — check your inbox.";
+    if (raw.includes("password")) return e.message; // e.g. password-length rules
+    return e?.message || "Something went wrong — please try again.";
+  };
 
   const submit = async () => {
+    setMsg(null);
+    if (!emailOk(email)) { setMsg({ kind: "error", text: "Enter a valid email address." }); return; }
+    if (password.length < 6) { setMsg({ kind: "error", text: "Password must be at least 6 characters." }); return; }
+
     setBusy(true);
     try {
       if (mode === "up") {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
         if (error) throw error;
-        flash("Account created — check your email if confirmation is on, or sign in.");
+        if (data.session) {
+          flash("Account created — welcome!"); // onAuthStateChange takes it from here
+        } else if ((data.user?.identities?.length ?? 0) === 0) {
+          // Supabase anti-enumeration: existing email -> no session, no error.
+          setMsg({ kind: "error", text: "That email already has an account. Switch to Sign in." });
+          setMode("in");
+        } else {
+          setMsg({ kind: "info", text: "Almost there — check your email to confirm your account, then sign in." });
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;
+        // success -> onAuthStateChange re-renders the app
       }
     } catch (e: any) {
-      flash(e?.message ?? "Auth failed.");
+      setMsg({ kind: "error", text: friendlyError(e) });
     } finally {
       setBusy(false);
     }
   };
 
+  const canSubmit = !busy && emailOk(email) && password.length >= 6;
+
   return (
     <div className="card" style={{ maxWidth: 440, margin: "48px auto" }}>
       <div className="seg" style={{ marginBottom: 16 }}>
-        <button className={"seg-b" + (mode === "in" ? " on" : "")} style={{ flex: 1 }} onClick={() => setMode("in")}>Sign in</button>
-        <button className={"seg-b" + (mode === "up" ? " on" : "")} style={{ flex: 1 }} onClick={() => setMode("up")}>Sign up</button>
+        <button className={"seg-b" + (mode === "in" ? " on" : "")} style={{ flex: 1 }} onClick={() => switchMode("in")}>Sign in</button>
+        <button className={"seg-b" + (mode === "up" ? " on" : "")} style={{ flex: 1 }} onClick={() => switchMode("up")}>Sign up</button>
       </div>
       <h2 className="h2">{mode === "in" ? "Welcome back" : "Create your account"}</h2>
       <p className="p small">
@@ -373,14 +402,37 @@ function Auth({ flash }: { flash: (m: string) => void }) {
           ? "Sign in with your work email."
           : "Sign up as an organiser — you'll create a company account and can invite colleagues to run sweepstakes with you."}
       </p>
-      <div className="stack" style={{ gap: 10, marginTop: 4 }}>
-        <input className="input" type="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input className="input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()} />
-        <button className="btn big" disabled={busy || !email || !password} onClick={submit}>
-          {busy ? "…" : mode === "in" ? "Sign in" : "Create account"}
+
+      {msg && (
+        <div
+          className="card"
+          style={{
+            margin: "12px 0 4px", padding: "10px 12px", fontSize: 13,
+            background: msg.kind === "error" ? "rgba(255,71,111,.10)" : "rgba(52,214,255,.10)",
+            borderColor: msg.kind === "error" ? "rgba(255,71,111,.4)" : "rgba(52,214,255,.4)",
+            color: msg.kind === "error" ? "var(--coral)" : "var(--cyan)",
+          }}
+        >
+          {msg.text}
+        </div>
+      )}
+
+      <div className="stack" style={{ gap: 10, marginTop: 8 }}>
+        <input className="input" type="email" autoComplete="email" placeholder="you@company.com"
+          value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+        <input className="input" type="password" autoComplete={mode === "in" ? "current-password" : "new-password"}
+          placeholder={mode === "in" ? "Password" : "Create a password (min 6 chars)"}
+          value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+        <button className="btn big" disabled={!canSubmit} onClick={submit}>
+          {busy ? "Working…" : mode === "in" ? "Sign in" : "Create account"}
         </button>
       </div>
+
+      <p className="muted small" style={{ marginTop: 12 }}>
+        {mode === "in"
+          ? <>New here? <a style={{ color: "var(--cyan)", cursor: "pointer" }} onClick={() => switchMode("up")}>Create an account</a></>
+          : <>Already have one? <a style={{ color: "var(--cyan)", cursor: "pointer" }} onClick={() => switchMode("in")}>Sign in</a></>}
+      </p>
     </div>
   );
 }
