@@ -301,9 +301,9 @@ export default function App() {
   return (
     <Shell topbar={<TopBar email={session.user.email ?? ""} isAdmin={isAdmin} onBack={backToDashboard} role={role} />}>
       <header className="hero">
-        <div className="hero-tag">FREE TO ENTER · PURE LUCK · {players.length} {players.length === 1 ? "PLAYER" : "PLAYERS"}</div>
-        <h1 className="hero-title">THE OFFICE<br /><span>WORLD CUP</span> SWEEP</h1>
-        <p className="hero-sub">USA · Canada · Mexico — 11 June to 19 July 2026 — 48 teams, 104 games.</p>
+        <div className="hero-tag">Free to enter · Pure luck · {players.length} {players.length === 1 ? "player" : "players"}</div>
+        <h1 className="hero-title">{bundle.name}</h1>
+        <p className="hero-sub">World Cup 2026 · 11 Jun – 19 Jul · 48 teams · 104 games</p>
       </header>
       <Pot config={config} scoring={scoring} results={results} />
       <nav className="tabs">

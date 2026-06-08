@@ -160,39 +160,23 @@ export function Setup({ config, onGenerate, flash, staffNames = [], type }: {
   type?: SweepstakeType | null;
 }) {
   const [fund, setFund] = useState<number | string>(config.fund || 500);
-  const [num, setNum] = useState(20);
-  const [names, setNames] = useState<string[]>(Array.from({ length: 20 }, () => ""));
   const [prizes, setPrizes] = useState<Prizes>(config.prizes);
   const [showTest, setShowTest] = useState(false);
   const kickoff = type?.startsAt ? new Date(type.startsAt) : null;
   const started = kickoff ? Date.now() >= kickoff.getTime() : false;
 
-  const setCount = (n: number) => {
-    n = Math.max(2, Math.min(80, Number(n) || 0));
-    setNum(n);
-    setNames((prev) => Array.from({ length: n }, (_, i) => prev[i] || ""));
-  };
-  const fillFromRoster = () => {
-    const roster = staffNames.filter((n) => n.trim());
-    if (!roster.length) { flash("No staff in the roster yet — add some on the account dashboard."); return; }
-    const n = Math.max(2, Math.min(80, roster.length));
-    setNum(n);
-    setNames(Array.from({ length: n }, (_, i) => roster[i] || ""));
-    flash(`Filled ${n} name${n === 1 ? "" : "s"} from the staff roster.`);
-  };
-  const setName = (i: number, v: string) => setNames((prev) => prev.map((x, j) => (j === i ? v : x)));
+  // Players come from the persistent account staff roster (single source of truth).
+  const roster = staffNames.filter((n) => n.trim());
   const setPrize = (key: "finalist" | "groupWinner" | "groupRunnerUp" | "boot", patch: Partial<Prizes["finalist"]>) =>
     setPrizes((p) => ({ ...p, [key]: { ...p[key], ...patch } }));
 
   const proj = useMemo(() => projection(Number(fund) || 0, prizes), [fund, prizes]);
-  const filled = names.filter((n) => n.trim()).length;
-  const dupe = new Set(names.map((n) => n.trim().toLowerCase()).filter(Boolean)).size !== filled;
-  const ready = filled === num && !dupe && (Number(fund) || 0) > 0;
+  const ready = roster.length >= 2 && (Number(fund) || 0) > 0;
 
   const doGen = () => {
-    if (!ready) { flash(dupe ? "Names must be unique." : "Fill in every name and a fund."); return; }
+    if (!ready) { flash(roster.length < 2 ? "Add at least 2 staff on the Account dashboard first." : "Set a prize fund above £0."); return; }
     if (proj.winnerFloor < 0 && !window.confirm("Your prizes commit more than the fund, so the Winner could get £0. Generate anyway?")) return;
-    onGenerate(Number(fund), prizes, names);
+    onGenerate(Number(fund), prizes, roster);
   };
 
   const PrizeRow = ({ label, k }: { label: string; k: "finalist" | "groupWinner" | "groupRunnerUp" | "boot" }) => (
@@ -218,20 +202,19 @@ export function Setup({ config, onGenerate, flash, staffNames = [], type }: {
       </div>
 
       <div className="card">
-        <h2 className="h2">2 · Staff</h2>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
-          <label className="fld" style={{ maxWidth: 180 }}><span>Number of players</span>
-            <input className="input" type="number" min="2" max="80" value={num} onChange={(e) => setCount(Number(e.target.value))} /></label>
-          {staffNames.length > 0 && (
-            <button className="btn ghost sm" onClick={fillFromRoster}>Fill from staff roster ({staffNames.length})</button>
-          )}
-        </div>
-        <div className="names-grid">
-          {names.map((n, i) => (
-            <input key={i} className="input" placeholder={`Player ${i + 1}`} value={n} onChange={(e) => setName(i, e.target.value)} />
-          ))}
-        </div>
-        {dupe && <p className="p small" style={{ color: "var(--coral)" }}>Two names match — they need to be unique.</p>}
+        <h2 className="h2">2 · Players</h2>
+        <p className="p small muted">
+          Everyone on your <b>staff roster</b> gets a ticket book. Add or remove people on the{" "}
+          <b>Account</b> dashboard — they're saved there, so nothing gets lost.
+        </p>
+        {roster.length ? (
+          <div className="chips" style={{ marginTop: 4 }}>
+            {roster.map((n) => <span key={n} className="chip">{n}</span>)}
+          </div>
+        ) : (
+          <p className="p small" style={{ color: "var(--coral)" }}>No staff yet — add at least 2 on the Account dashboard.</p>
+        )}
+        <p className="p small muted" style={{ marginTop: 10 }}><b>{roster.length}</b> player{roster.length === 1 ? "" : "s"} will be dealt in.</p>
       </div>
 
       <div className="card">
@@ -284,7 +267,7 @@ export function Setup({ config, onGenerate, flash, staffNames = [], type }: {
               <DryRun
                 type={type}
                 organiser
-                roster={names.filter((n) => n.trim())}
+                roster={roster}
                 fund={Number(fund) || 0}
                 prizes={prizes}
                 onClose={() => setShowTest(false)}
@@ -296,8 +279,8 @@ export function Setup({ config, onGenerate, flash, staffNames = [], type }: {
 
       <div className="card">
         <h2 className="h2">4 · Generate</h2>
-        <div style={{ marginTop: 4 }}><button className="btn big" disabled={!ready} onClick={doGen}>🎟️ Generate &amp; deal {num} ticket books</button></div>
-        {!ready && <p className="muted small" style={{ marginTop: 8 }}>{filled}/{num} names entered.</p>}
+        <div style={{ marginTop: 4 }}><button className="btn big" disabled={!ready} onClick={doGen}>🎟️ Generate &amp; deal {roster.length} ticket book{roster.length === 1 ? "" : "s"}</button></div>
+        {!ready && <p className="muted small" style={{ marginTop: 8 }}>{roster.length < 2 ? "Add at least 2 staff on the Account dashboard." : "Set a prize fund above £0."}</p>}
       </div>
     </div>
   );

@@ -65,6 +65,10 @@ default prizes) that picks an engine. New data = no code; a new format = a new e
 - D. Super-admin console + public share-link board.
 
 ## Conventions
-- Palette is intentional: deep navy / electric blue / coral. **Never** add green-and-gold.
+- **Design system (redesigned 2026-06-08): clean light SaaS.** Inter font (no more
+  Anton/condensed), light surfaces (`--bg #f5f6f8` / white cards), indigo primary
+  (`--primary #4f46e5`), slate neutrals, soft shadows, generous spacing. Tokens +
+  shared component classes live in `src/styles.css`; restyle there to cascade
+  app-wide. (Superseded the old dark navy/electric-blue/coral + Anton theme.)
 - Standings are derived, never stored (recompute via `compute`).
 - Generation is one transaction (`generate_sweepstake` RPC). Auth replaces the old PIN.
