@@ -1,0 +1,346 @@
+/* =========================================================================
+   Presentational views — ported from world-cup-sweepstake.jsx, retyped against
+   the core domain types. Pure display; all data + handlers come from App.
+   ========================================================================= */
+import { useMemo, useState } from "react";
+import {
+  GROUPS,
+  SCORER_POOL,
+  TEAMS,
+  TOTAL_GAMES,
+  groupOf as coreGroupOf,
+  money,
+  projection,
+  scoreFor,
+  toGBP,
+  type Config,
+  type Player,
+  type Prizes,
+  type Results,
+  type Scoring,
+} from "../core";
+
+const groupOf = (t: string) => coreGroupOf(t, GROUPS);
+
+/* ------------------------------ Pot ------------------------------------ */
+export function Pot({ config, scoring, results }: { config: Config; scoring: Scoring; results: Results }) {
+  const fund = Number(config.fund) || 0;
+  const remaining = Math.max(0, fund - scoring.paid);
+  return (
+    <div className="pot">
+      <div className="pot-row">
+        <div className="pot-cell"><span className="pot-big">{money(fund)}</span><span className="pot-lbl">Prize fund</span></div>
+        <div className="pot-cell"><span className="pot-big" style={{ color: "var(--coral)" }}>{money(scoring.paid)}</span><span className="pot-lbl">Paid out</span></div>
+        <div className="pot-cell"><span className="pot-big" style={{ color: "var(--cyan)" }}>{money(remaining)}</span><span className="pot-lbl">{results.champion ? "Winner's jackpot" : "Jackpot (running)"}</span></div>
+      </div>
+      <div className="bar"><div className="bar-fill" style={{ width: `${fund ? Math.min(100, (scoring.paid / fund) * 100) : 0}%` }} /></div>
+    </div>
+  );
+}
+
+/* ------------------------------ Home ----------------------------------- */
+export function Home({ config }: { config: Config }) {
+  const fund = Number(config.fund) || 0;
+  const P = config.prizes;
+  const f = toGBP(P.finalist, fund), gw = toGBP(P.groupWinner, fund), gru = toGBP(P.groupRunnerUp, fund), boot = toGBP(P.boot, fund);
+  const rows: [string, string, string][] = [
+    ["⚽ Correct score", `${money(P.perGame)} a game`, "Every game you're dealt a fresh correct-score ticket — team 1 (listed first) then team 2 — and it rotates each match. Match the exact 90-min score in fixture order and you win (split if more than one of you holds it). Scores nobody holds roll into the jackpot."],
+    ["🥇 Group winner", `${money(gw)} each`, "Each of your group-winner team tickets that tops its group."],
+    ["🥈 Group runner-up", `${money(gru)} each`, "Each of your runner-up team tickets that finishes 2nd."],
+    ["🎽 Reaches the final", `${money(f)} each`, "Each of your finalist tickets that makes the final."],
+    ["👟 Golden Boot", `${money(boot)}`, "Hold the tournament's top scorer."],
+    ["🏆 World Cup Winner", "The jackpot", "Hold the team that lifts the cup — take everything left in the fund."],
+  ];
+  return (
+    <div className="stack">
+      <div className="card">
+        <h2 className="h2">A ticket book each — and something every day</h2>
+        <p className="p">There's no picking and no skill. The organiser deals everyone a <b>book of tickets</b>: separate teams for the Winner, the Finalists, Group winners and Group runners-up, a clutch of Golden Boot players, and a <b>fresh scoreline for every single game</b>.</p>
+        <p className="p">Because each market is dealt on its own and balanced by value, nobody ends up with a dud hand — if you miss out on a big-ticket draw you get extra smaller tickets to make up for it. And with a rotating scoreline every match, you've got a live shot at {money(P.perGame)} on all 104 games.</p>
+      </div>
+      <div className="card">
+        <h2 className="h2">How the {money(fund)} pays out</h2>
+        <div className="prizes">
+          {rows.map(([t, amt, d]) => (
+            <div className="prize" key={t}>
+              <div className="prize-top"><span className="prize-name">{t}</span><span className="prize-amt">{amt}</span></div>
+              <div className="prize-desc">{d}</div>
+            </div>
+          ))}
+        </div>
+        <p className="p small">The fund is self-balancing: small wins draw it down live and the champion's holder takes the remainder. Unheld scorelines flow back into that jackpot.</p>
+      </div>
+      <div className="card subtle"><p className="p small"><b>Note:</b> a free-to-enter, luck-based office draw — a straightforward sweepstake rather than anything needing a licence. General info, not legal advice; your HR/finance team can confirm it's fine to run.</p></div>
+    </div>
+  );
+}
+
+/* ---------------------------- Tickets ---------------------------------- */
+function TeamLine({ label, teams }: { label: string; teams: string[] }) {
+  if (!teams || !teams.length) return null;
+  return (
+    <div className="t-block"><div className="t-lbl">{label}</div>
+      <div className="t-teams">{teams.map((t) => <span className="t-team" key={t}>{t}<i>{groupOf(t)}</i></span>)}</div></div>
+  );
+}
+
+function Ticket({ pl, sc, champ, upcoming, gameNo }: { pl: Player; sc: Scoring["per"][string] | undefined; champ: boolean; upcoming: string; gameNo: number }) {
+  const b = sc?.breakdown || {};
+  const lines: [string, number][] = ([["Daily", b.daily], ["Group winner", b.groupWinner], ["Runner-up", b.groupRunnerUp], ["Finalist", b.finalist], ["Golden Boot", b.boot], ["🏆 Jackpot", b.jackpot]] as [string, number | undefined][]).filter(([, v]) => v).map(([k, v]) => [k, v as number]);
+  return (
+    <div className={"ticket" + (champ ? " champ" : "")}>
+      <div className="ticket-head"><span className="ticket-name">{pl.name}</span><span className="ticket-total">{money(sc?.total || 0)}</span></div>
+      <div className="ticket-body">
+        <TeamLine label="🏆 Winner" teams={pl.winnerTeams} />
+        <TeamLine label="🎽 Reaches final" teams={pl.finalistTeams} />
+        <TeamLine label="🥇 Group winner" teams={pl.groupWinnerTeams} />
+        <TeamLine label="🥈 Group runner-up" teams={pl.groupRunnerUpTeams} />
+        <div className="t-block"><div className="t-lbl">👟 Golden Boot</div>
+          <div className="t-scorers">{(pl.bootPlayers || []).map((s) => <span className="t-scorer" key={s}>{s}</span>)}</div></div>
+        <div className="t-block scoreline-now"><div className="t-lbl">⚽ Correct score · game {gameNo}</div><div className="t-pill">{upcoming}</div><span className="rotates">team 1–team 2 · rotates next game</span></div>
+      </div>
+      {lines.length > 0 && <div className="ticket-foot">{lines.map(([k, v]) => <span className="win" key={k}>{k} <b>{money(v)}</b></span>)}</div>}
+    </div>
+  );
+}
+
+export function Tickets({ scoring, config, results }: { scoring: Scoring; config: Config; results: Results }) {
+  if (!config.generated) return <div className="card muted">Not generated yet.</div>;
+  const ordered = scoring.ordered;
+  const nextGame = (results.games || []).length;
+  const list = [...ordered].sort((a, b) => (scoring.per[b.id]?.total || 0) - (scoring.per[a.id]?.total || 0));
+  return (
+    <div className="tickets-grid">
+      {list.map((pl) => {
+        const pi = scoring.idx[pl.id];
+        const upcoming = scoreFor(config.seed, nextGame, pi);
+        return <Ticket key={pl.id} pl={pl} sc={scoring.per[pl.id]} champ={scoring.championHolder === pl.id} upcoming={upcoming} gameNo={nextGame + 1} />;
+      })}
+    </div>
+  );
+}
+
+/* ----------------------------- Daily ----------------------------------- */
+export function Daily({ scoring, config, results }: { scoring: Scoring; config: Config; results: Results }) {
+  const games = results.games || [];
+  const paidGames = scoring.gameWinners.filter((w) => w.length).length;
+  return (
+    <div className="stack">
+      <div className="card">
+        <h2 className="h2">Daily games <span className="muted" style={{ fontWeight: 400 }}>· {games.length} of {TOTAL_GAMES} logged</span></h2>
+        <p className="p small">{paidGames} paid out at {money(config.prizes.perGame)} each; {games.length - paidGames} landed on a scoreline nobody held and rolled into the jackpot.</p>
+      </div>
+      {games.length === 0 ? <div className="card muted">No games logged yet. The organiser logs each 90-minute result in the Organiser tab.</div> :
+        games.map((g, i) => ({ g, i })).reverse().map(({ g, i }) => {
+          const winners = (scoring.gameWinners[i] || []).map((id) => scoring.ordered.find((p) => p.id === id)?.name).filter(Boolean) as string[];
+          return (
+            <div className="card game" key={g.gameIndex}>
+              <div className="game-l"><span className="game-no">#{g.gameIndex + 1}</span><span className="game-score">{g.score}</span><span className="game-label">{g.label || "Match"}</span></div>
+              <div className="game-r">{winners.length ? winners.map((n) => <span className="chip win-chip" key={n}>{n} +{money(config.prizes.perGame / winners.length)}</span>) : <span className="muted">→ jackpot</span>}</div>
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
+/* ----------------------------- Board ----------------------------------- */
+export function Board({ scoring, results }: { scoring: Scoring; results: Results }) {
+  if (!scoring.ordered.length) return <div className="card muted">No players yet.</div>;
+  const list = [...scoring.ordered].sort((a, b) => (scoring.per[b.id]?.total || 0) - (scoring.per[a.id]?.total || 0));
+  return (
+    <div className="stack">
+      {!results.champion && <div className="card subtle"><p className="p small">Live standings. The 🏆 jackpot ({money(scoring.jackpot)}) is shown against whoever holds the eventual champion.</p></div>}
+      <div className="card">
+        <table className="board"><thead><tr><th>#</th><th>Player</th><th style={{ textAlign: "right" }}>Won</th></tr></thead>
+          <tbody>{list.map((p, i) => (
+            <tr key={p.id} className={scoring.championHolder === p.id ? "champ-row" : ""}>
+              <td className="rank">{i + 1}</td><td>{p.name}{scoring.championHolder === p.id && " 🏆"}</td>
+              <td style={{ textAlign: "right", fontWeight: 700 }}>{money(scoring.per[p.id]?.total || 0)}</td>
+            </tr>))}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------- Setup (organiser) ------------------------- */
+export function Setup({ config, onGenerate, flash }: {
+  config: Config;
+  onGenerate: (fund: number, prizes: Prizes, names: string[]) => void;
+  flash: (m: string) => void;
+}) {
+  const [fund, setFund] = useState<number | string>(config.fund || 500);
+  const [num, setNum] = useState(20);
+  const [names, setNames] = useState<string[]>(Array.from({ length: 20 }, () => ""));
+  const [prizes, setPrizes] = useState<Prizes>(config.prizes);
+
+  const setCount = (n: number) => {
+    n = Math.max(2, Math.min(80, Number(n) || 0));
+    setNum(n);
+    setNames((prev) => Array.from({ length: n }, (_, i) => prev[i] || ""));
+  };
+  const setName = (i: number, v: string) => setNames((prev) => prev.map((x, j) => (j === i ? v : x)));
+  const setPrize = (key: "finalist" | "groupWinner" | "groupRunnerUp" | "boot", patch: Partial<Prizes["finalist"]>) =>
+    setPrizes((p) => ({ ...p, [key]: { ...p[key], ...patch } }));
+
+  const proj = useMemo(() => projection(Number(fund) || 0, prizes), [fund, prizes]);
+  const filled = names.filter((n) => n.trim()).length;
+  const dupe = new Set(names.map((n) => n.trim().toLowerCase()).filter(Boolean)).size !== filled;
+  const ready = filled === num && !dupe && (Number(fund) || 0) > 0;
+
+  const doGen = () => {
+    if (!ready) { flash(dupe ? "Names must be unique." : "Fill in every name and a fund."); return; }
+    if (proj.winnerFloor < 0 && !window.confirm("Your prizes commit more than the fund, so the Winner could get £0. Generate anyway?")) return;
+    onGenerate(Number(fund), prizes, names);
+  };
+
+  const PrizeRow = ({ label, k }: { label: string; k: "finalist" | "groupWinner" | "groupRunnerUp" | "boot" }) => (
+    <div className="prizeset">
+      <span className="ps-label">{label}</span>
+      <div className="ps-controls">
+        <input className="input num2" type="number" min="0" value={prizes[k].value} onChange={(e) => setPrize(k, { value: Number(e.target.value) })} />
+        <div className="seg">
+          <button className={"seg-b" + (prizes[k].mode === "£" ? " on" : "")} onClick={() => setPrize(k, { mode: "£" })}>£</button>
+          <button className={"seg-b" + (prizes[k].mode === "%" ? " on" : "")} onClick={() => setPrize(k, { mode: "%" })}>%</button>
+        </div>
+        <span className="ps-gbp">= {money(toGBP(prizes[k], Number(fund) || 0))} each</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="stack">
+      <div className="card">
+        <h2 className="h2">1 · Prize fund</h2>
+        <div className="join-row"><span className="prefix">£</span>
+          <input className="input" type="number" min="0" value={fund} onChange={(e) => setFund(e.target.value)} /></div>
+      </div>
+
+      <div className="card">
+        <h2 className="h2">2 · Staff</h2>
+        <label className="fld" style={{ maxWidth: 180 }}><span>Number of players</span>
+          <input className="input" type="number" min="2" max="80" value={num} onChange={(e) => setCount(Number(e.target.value))} /></label>
+        <div className="names-grid">
+          {names.map((n, i) => (
+            <input key={i} className="input" placeholder={`Player ${i + 1}`} value={n} onChange={(e) => setName(i, e.target.value)} />
+          ))}
+        </div>
+        {dupe && <p className="p small" style={{ color: "var(--coral)" }}>Two names match — they need to be unique.</p>}
+      </div>
+
+      <div className="card">
+        <h2 className="h2">3 · Prize amounts</h2>
+        <p className="p small">Set each as £ or % of the fund. The Winner takes whatever's left.</p>
+        <div className="prizeset">
+          <span className="ps-label">⚽ Daily scoreline (per game)</span>
+          <div className="ps-controls">
+            <span className="prefix sm">£</span>
+            <input className="input num2" type="number" min="0" step="0.5" value={prizes.perGame} onChange={(e) => setPrizes((p) => ({ ...p, perGame: Number(e.target.value) }))} />
+            <span className="ps-gbp">× up to {TOTAL_GAMES} games = up to {money((Number(prizes.perGame) || 0) * TOTAL_GAMES)}</span>
+          </div>
+        </div>
+        <PrizeRow label="🥇 Group winner (×12)" k="groupWinner" />
+        <PrizeRow label="🥈 Group runner-up (×12)" k="groupRunnerUp" />
+        <PrizeRow label="🎽 Reaches the final (×2)" k="finalist" />
+        <PrizeRow label="👟 Golden Boot (×1)" k="boot" />
+      </div>
+
+      <div className="card">
+        <h2 className="h2">Outcome check</h2>
+        <table className="breakdown">
+          <thead><tr><th>Prize</th><th>Each</th><th>Pays</th><th style={{ textAlign: "right" }}>Total</th></tr></thead>
+          <tbody>
+            {proj.rows.map((r) => (<tr key={r.name}><td>{r.name}</td><td>{money(r.unit)}</td><td className="muted">{r.note}</td><td style={{ textAlign: "right" }}>{money(r.total)}</td></tr>))}
+            <tr className="br-sum"><td>Committed to small prizes</td><td></td><td></td><td style={{ textAlign: "right" }}>{money(proj.committed)}</td></tr>
+            <tr className={"br-win" + (proj.winnerFloor < 0 ? " bad" : "")}><td>🏆 Winner's jackpot (at least)</td><td></td><td className="muted">remainder</td><td style={{ textAlign: "right", fontWeight: 800 }}>{money(Math.max(0, proj.winnerFloor))}</td></tr>
+          </tbody>
+        </table>
+        {proj.winnerFloor < 0
+          ? <p className="p small" style={{ color: "var(--coral)" }}>⚠️ Small prizes commit {money(proj.committed)} — more than the {money(proj.fund)} fund. Trim them or the Winner gets nothing.</p>
+          : <p className="p small">In practice the Winner usually gets <b>more</b> than this: any daily game whose score nobody holds rolls back into the jackpot.</p>}
+      </div>
+
+      <div className="card">
+        <h2 className="h2">4 · Generate</h2>
+        <div style={{ marginTop: 4 }}><button className="btn big" disabled={!ready} onClick={doGen}>🎟️ Generate &amp; deal {num} ticket books</button></div>
+        {!ready && <p className="muted small" style={{ marginTop: 8 }}>{filled}/{num} names entered.</p>}
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------- OrgManage --------------------------------- */
+export function OrgManage({ config, results, players, scoring, actions, flash }: {
+  config: Config;
+  results: Results;
+  players: Player[];
+  scoring: Scoring;
+  actions: {
+    logGame: (score: string, label: string) => Promise<void>;
+    undoLast: () => Promise<void>;
+    setGroup: (g: string, slot: 1 | 2, team: string) => Promise<void>;
+    setFinalist: (i: number, team: string) => Promise<void>;
+    setChampion: (team: string) => Promise<void>;
+    setTopScorer: (s: string) => Promise<void>;
+    reset: () => Promise<void>;
+  };
+  flash: (m: string) => void;
+}) {
+  void players;
+  void scoring;
+  const [a, setA] = useState<number | string>(0), [b, setB] = useState<number | string>(0), [label, setLabel] = useState("");
+  const games = results.games || [];
+  const logGame = async () => {
+    await actions.logGame(`${Number(a)}-${Number(b)}`, label.trim());
+    setA(0); setB(0); setLabel(""); flash(`Logged game #${games.length + 1}.`);
+  };
+  const finalistOpts = (results.finalists || []).filter(Boolean);
+
+  return (
+    <div className="stack">
+      <div className="card">
+        <h2 className="h2">Log a game · {money(config.prizes.perGame)} each</h2>
+        <p className="p small">Next is <b>game #{games.length + 1}</b>. Scorelines rotate each game, so log in order. <b>Order matters now</b> — enter the goals for the team listed first in the fixture, then the second team.</p>
+        <div className="game-form">
+          <label className="scorefld"><span>Team 1</span><input className="input num" type="number" min="0" value={a} onChange={(e) => setA(e.target.value)} /></label>
+          <span className="dash">–</span>
+          <label className="scorefld"><span>Team 2</span><input className="input num" type="number" min="0" value={b} onChange={(e) => setB(e.target.value)} /></label>
+          <input className="input" placeholder="Fixture (e.g. Brazil v Scotland)" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <button className="btn" onClick={logGame}>Log</button>
+        </div>
+        {games.length > 0 && <div style={{ marginTop: 12 }}>
+          <span className="muted small">Last logged: #{games.length} ({games[games.length - 1].score}) </span>
+          <button className="btn ghost sm" onClick={() => actions.undoLast()}>Undo last</button>
+        </div>}
+      </div>
+
+      <div className="card">
+        <h2 className="h2">Group placements</h2>
+        <p className="p small">Set 1st &amp; 2nd in each group when the group stage ends.</p>
+        <div className="groups-grid">
+          {Object.keys(GROUPS).map((g) => (
+            <div className="grp" key={g}><div className="grp-h">Group {g}</div>
+              <select className="input mini" value={results.groupFirst[g] || ""} onChange={(e) => actions.setGroup(g, 1, e.target.value)}><option value="">1st…</option>{GROUPS[g].map((t) => <option key={t}>{t}</option>)}</select>
+              <select className="input mini" value={results.groupSecond[g] || ""} onChange={(e) => actions.setGroup(g, 2, e.target.value)}><option value="">2nd…</option>{GROUPS[g].map((t) => <option key={t}>{t}</option>)}</select>
+            </div>))}
+        </div>
+      </div>
+
+      <div className="card">
+        <h2 className="h2">Knockout results</h2>
+        <div className="kg">
+          <label className="fld"><span>Finalist 1</span><select className="input" value={(results.finalists || [])[0] || ""} onChange={(e) => actions.setFinalist(0, e.target.value)}><option value="">—</option>{TEAMS.map((t) => <option key={t}>{t}</option>)}</select></label>
+          <label className="fld"><span>Finalist 2</span><select className="input" value={(results.finalists || [])[1] || ""} onChange={(e) => actions.setFinalist(1, e.target.value)}><option value="">—</option>{TEAMS.map((t) => <option key={t}>{t}</option>)}</select></label>
+          <label className="fld"><span>🏆 Champion (jackpot)</span><select className="input" value={results.champion || ""} onChange={(e) => actions.setChampion(e.target.value)}><option value="">—</option>{(finalistOpts.length ? finalistOpts : TEAMS).map((t) => <option key={t}>{t}</option>)}</select></label>
+          <label className="fld wide"><span>👟 Golden Boot</span><select className="input" value={results.topScorer || ""} onChange={(e) => actions.setTopScorer(e.target.value)}><option value="">—</option>{SCORER_POOL.map((s) => <option key={s}>{s}</option>)}</select></label>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2 className="h2">Danger zone</h2>
+        <button className="btn danger" onClick={() => window.confirm("Wipe all tickets, the draw and results, and start a new setup?") && actions.reset()}>Reset &amp; re-run setup</button>
+      </div>
+    </div>
+  );
+}
