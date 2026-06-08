@@ -4,7 +4,10 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 import {
   compute,
+  deriveGroupPlacings,
+  groupTable,
   DEFAULT_PRIZES,
+  GROUPS,
   type Config,
   type Player,
   type Prizes,
@@ -30,11 +33,12 @@ import {
 } from "./db/repo";
 import { Board, Daily, Home, OrgManage, Pot, Setup, Tickets } from "./ui/views";
 import { AccountDashboard } from "./ui/AccountAdmin";
+import { GroupTables } from "./ui/GroupTables";
 
 const EMPTY_CONFIG: Config = { fund: 500, seed: 0, prizes: DEFAULT_PRIZES, generated: false };
 const EMPTY_RESULTS: Results = { games: [], groupFirst: {}, groupSecond: {}, finalists: [], champion: "", topScorer: "" };
 
-type Tab = "home" | "tickets" | "daily" | "board" | "org";
+type Tab = "home" | "tickets" | "daily" | "groups" | "board" | "org";
 type Mode = "dashboard" | "sweep";
 
 export default function App() {
@@ -160,8 +164,17 @@ export default function App() {
 
   const config = bundle?.config ?? EMPTY_CONFIG;
   const players: Player[] = bundle?.players ?? [];
-  const results = bundle?.results ?? EMPTY_RESULTS;
+  const rawResults = bundle?.results ?? EMPTY_RESULTS;
   const role: Role = bundle?.role ?? "player";
+
+  // Live group standings, derived from the logged games (tournament). Group
+  // 1st/2nd are computed from the table (only once a group is complete) and
+  // injected into the results compute() sees — no more manual group entry.
+  const groupTbl = useMemo(() => groupTable(GROUPS, rawResults.games), [rawResults.games]);
+  const results = useMemo<Results>(() => {
+    const { groupFirst, groupSecond } = deriveGroupPlacings(groupTbl);
+    return { ...rawResults, groupFirst, groupSecond };
+  }, [rawResults, groupTbl]);
 
   const scoring = useMemo(() => compute(players, results, config), [players, results, config]);
 
@@ -175,13 +188,6 @@ export default function App() {
     undoLast: async () => {
       if (!sweepstakeId || !results.games.length) return;
       await undoLastGame(sweepstakeId, results.games[results.games.length - 1].gameIndex);
-      await reload();
-    },
-    setGroup: async (g: string, slot: 1 | 2, team: string) => {
-      if (!sweepstakeId) return;
-      const key = slot === 1 ? "group_first" : "group_second";
-      const cur = slot === 1 ? results.groupFirst : results.groupSecond;
-      await saveResultPatch(sweepstakeId, { [key]: { ...cur, [g]: team } } as any);
       await reload();
     },
     setFinalist: async (i: number, team: string) => {
@@ -273,7 +279,7 @@ export default function App() {
     );
   }
 
-  const tabs: [Tab, string][] = [["home", "How it works"], ["tickets", "Tickets"], ["daily", "Daily games"], ["board", "Leaderboard"]];
+  const tabs: [Tab, string][] = [["home", "How it works"], ["tickets", "Tickets"], ["daily", "Daily games"], ["groups", "Groups"], ["board", "Leaderboard"]];
   if (role === "organiser") tabs.push(["org", "Organiser"]);
 
   return (
@@ -296,6 +302,7 @@ export default function App() {
           {tab === "home" && <Home config={config} />}
           {tab === "tickets" && <Tickets scoring={scoring} config={config} results={results} />}
           {tab === "daily" && <Daily scoring={scoring} config={config} results={results} />}
+          {tab === "groups" && <GroupTables table={groupTbl} />}
           {tab === "board" && <Board scoring={scoring} results={results} />}
           {tab === "org" && role === "organiser" && (
             config.generated

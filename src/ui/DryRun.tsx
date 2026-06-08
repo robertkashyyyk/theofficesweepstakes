@@ -10,10 +10,17 @@
    ========================================================================= */
 import { useMemo, useState } from "react";
 import {
+  bestThirds,
   compute,
   dealTickets,
+  deriveFinalChampion,
+  deriveGroupPlacings,
+  groupFixtures,
+  groupOrderFromTable,
+  groupTable,
   mulberry32,
-  simulateTournament,
+  playBracket,
+  qualifiers,
   DEFAULT_PRIZES,
   type Config,
   type Prizes,
@@ -22,8 +29,9 @@ import {
 import type { SweepstakeType } from "../db/repo";
 import { Board, Daily, Pot, Tickets } from "./views";
 import { Bracket } from "./Bracket";
+import { GroupTables } from "./GroupTables";
 
-type Tab = "board" | "bracket" | "tickets" | "daily";
+type Tab = "board" | "groups" | "bracket" | "tickets" | "daily";
 const PLAYER_COUNT = 20;
 
 export function DryRun({ type, onClose }: { type: SweepstakeType; onClose: () => void }) {
@@ -42,34 +50,36 @@ export function DryRun({ type, onClose }: { type: SweepstakeType; onClose: () =>
     const rng = mulberry32(nonce >>> 0);
     const fund = 500;
     const prizes: Prizes = (type.defaultPrizes as Prizes) ?? DEFAULT_PRIZES;
+    const rndScore = () => `${Math.floor(rng() * 5)}-${Math.floor(rng() * 5)}`;
 
     const inputs = Array.from({ length: PLAYER_COUNT }, (_, i) => ({
       id: `dry-${i}`, name: `Player ${i + 1}`, createdAt: 1_700_000_000_000 + i,
     }));
     const players = dealTickets(inputs, fund, prizes, rng);
 
-    const t = simulateTournament(groups, rng);
-    const games = Array.from({ length: totalGames }, (_, i) => ({
-      gameIndex: i,
-      score: `${Math.floor(rng() * 5)}-${Math.floor(rng() * 5)}`,
-      label: `Game ${i + 1}`,
+    // 1) play the group stage on real fixtures, 2) build the table, 3) feed the bracket.
+    const fixtures = groupFixtures(groups);
+    const groupGames = fixtures.map((f) => ({ gameIndex: f.index, score: rndScore(), label: `${f.home} v ${f.away}` }));
+    const table = groupTable(groups, groupGames);
+    const qs = qualifiers(groupOrderFromTable(table), bestThirds(table));
+    const bracket = playBracket(qs, (x, y) => (rng() < 0.5 ? x : y));
+    const { finalists, champion } = deriveFinalChampion(bracket);
+    const { groupFirst, groupSecond } = deriveGroupPlacings(table);
+
+    // remaining slots are knockout games (random scores) so Daily/correct-score fills out
+    const koGames = Array.from({ length: Math.max(0, totalGames - fixtures.length) }, (_, i) => ({
+      gameIndex: fixtures.length + i, score: rndScore(), label: "Knockout",
     }));
+    const games = [...groupGames, ...koGames];
     const topScorer = scorerPool.length ? scorerPool[Math.floor(rng() * scorerPool.length)] : "";
 
-    const results: Results = {
-      games,
-      groupFirst: t.groupFirst,
-      groupSecond: t.groupSecond,
-      finalists: t.finalists,
-      champion: t.champion,
-      topScorer,
-    };
+    const results: Results = { games, groupFirst, groupSecond, finalists, champion, topScorer };
     const config: Config = { fund, seed: nonce >>> 0, prizes, generated: true };
     const scoring = compute(players, results, config);
-    return { results, config, scoring, bracket: t.bracket };
+    return { results, config, scoring, bracket, table };
   }, [supported, nonce, groups, scorerPool, totalGames, type.defaultPrizes]);
 
-  const tabs: [Tab, string][] = [["board", "Leaderboard"], ["bracket", "Bracket"], ["tickets", "Tickets"], ["daily", "Daily games"]];
+  const tabs: [Tab, string][] = [["board", "Leaderboard"], ["groups", "Groups"], ["bracket", "Bracket"], ["tickets", "Tickets"], ["daily", "Daily games"]];
 
   return (
     <div className="card" style={{ borderColor: "var(--blue)" }}>
@@ -100,6 +110,7 @@ export function DryRun({ type, onClose }: { type: SweepstakeType; onClose: () =>
             ))}
           </nav>
           {tab === "board" && <Board scoring={sim.scoring} results={sim.results} />}
+          {tab === "groups" && <GroupTables table={sim.table} />}
           {tab === "bracket" && <Bracket bracket={sim.bracket} />}
           {tab === "tickets" && <Tickets scoring={sim.scoring} config={sim.config} results={sim.results} />}
           {tab === "daily" && <Daily scoring={sim.scoring} config={sim.config} results={sim.results} />}

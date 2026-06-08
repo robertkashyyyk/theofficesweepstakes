@@ -8,7 +8,9 @@ import {
   SCORER_POOL,
   TEAMS,
   TOTAL_GAMES,
+  groupFixtures,
   groupOf as coreGroupOf,
+  groupTable,
   money,
   projection,
   scoreFor,
@@ -19,6 +21,7 @@ import {
   type Results,
   type Scoring,
 } from "../core";
+import { GroupTables } from "./GroupTables";
 
 const groupOf = (t: string) => coreGroupOf(t, GROUPS);
 
@@ -293,7 +296,6 @@ export function OrgManage({ config, results, players, scoring, actions, flash }:
   actions: {
     logGame: (score: string, label: string) => Promise<void>;
     undoLast: () => Promise<void>;
-    setGroup: (g: string, slot: 1 | 2, team: string) => Promise<void>;
     setFinalist: (i: number, team: string) => Promise<void>;
     setChampion: (team: string) => Promise<void>;
     setTopScorer: (s: string) => Promise<void>;
@@ -305,8 +307,13 @@ export function OrgManage({ config, results, players, scoring, actions, flash }:
   void scoring;
   const [a, setA] = useState<number | string>(0), [b, setB] = useState<number | string>(0), [label, setLabel] = useState("");
   const games = results.games || [];
+  const fixtures = useMemo(() => groupFixtures(GROUPS), []);
+  const table = useMemo(() => groupTable(GROUPS, games), [games]);
+  const nextFix = fixtures[games.length]; // a known group fixture, or undefined (knockout)
+
   const logGame = async () => {
-    await actions.logGame(`${Number(a)}-${Number(b)}`, label.trim());
+    const lbl = nextFix ? `${nextFix.home} v ${nextFix.away}` : label.trim();
+    await actions.logGame(`${Number(a)}-${Number(b)}`, lbl);
     setA(0); setB(0); setLabel(""); flash(`Logged game #${games.length + 1}.`);
   };
   const finalistOpts = (results.finalists || []).filter(Boolean);
@@ -315,30 +322,33 @@ export function OrgManage({ config, results, players, scoring, actions, flash }:
     <div className="stack">
       <div className="card">
         <h2 className="h2">Log a game · {money(config.prizes.perGame)} each</h2>
-        <p className="p small">Next is <b>game #{games.length + 1}</b>. Scorelines rotate each game, so log in order. <b>Order matters now</b> — enter the goals for the team listed first in the fixture, then the second team.</p>
+        {nextFix ? (
+          <p className="p small">
+            Next: <b>game #{games.length + 1}</b> · Group {nextFix.group} ·{" "}
+            <b>{nextFix.home} v {nextFix.away}</b>. Enter the score in that order — it updates the group table automatically.
+          </p>
+        ) : (
+          <p className="p small">
+            Group stage complete. <b>Game #{games.length + 1}</b> is a knockout match — enter the score and the fixture name.
+          </p>
+        )}
         <div className="game-form">
-          <label className="scorefld"><span>Team 1</span><input className="input num" type="number" min="0" value={a} onChange={(e) => setA(e.target.value)} /></label>
+          <label className="scorefld"><span>{nextFix ? nextFix.home : "Team 1"}</span><input className="input num" type="number" min="0" value={a} onChange={(e) => setA(e.target.value)} /></label>
           <span className="dash">–</span>
-          <label className="scorefld"><span>Team 2</span><input className="input num" type="number" min="0" value={b} onChange={(e) => setB(e.target.value)} /></label>
-          <input className="input" placeholder="Fixture (e.g. Brazil v Scotland)" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <label className="scorefld"><span>{nextFix ? nextFix.away : "Team 2"}</span><input className="input num" type="number" min="0" value={b} onChange={(e) => setB(e.target.value)} /></label>
+          {!nextFix && <input className="input" placeholder="Fixture (e.g. Final · Brazil v France)" value={label} onChange={(e) => setLabel(e.target.value)} />}
           <button className="btn" onClick={logGame}>Log</button>
         </div>
         {games.length > 0 && <div style={{ marginTop: 12 }}>
-          <span className="muted small">Last logged: #{games.length} ({games[games.length - 1].score}) </span>
+          <span className="muted small">Last logged: #{games.length} ({games[games.length - 1].score}{games[games.length - 1].label ? ` · ${games[games.length - 1].label}` : ""}) </span>
           <button className="btn ghost sm" onClick={() => actions.undoLast()}>Undo last</button>
         </div>}
       </div>
 
       <div className="card">
-        <h2 className="h2">Group placements</h2>
-        <p className="p small">Set 1st &amp; 2nd in each group when the group stage ends.</p>
-        <div className="groups-grid">
-          {Object.keys(GROUPS).map((g) => (
-            <div className="grp" key={g}><div className="grp-h">Group {g}</div>
-              <select className="input mini" value={results.groupFirst[g] || ""} onChange={(e) => actions.setGroup(g, 1, e.target.value)}><option value="">1st…</option>{GROUPS[g].map((t) => <option key={t}>{t}</option>)}</select>
-              <select className="input mini" value={results.groupSecond[g] || ""} onChange={(e) => actions.setGroup(g, 2, e.target.value)}><option value="">2nd…</option>{GROUPS[g].map((t) => <option key={t}>{t}</option>)}</select>
-            </div>))}
-        </div>
+        <h2 className="h2">Group standings</h2>
+        <p className="p small">Builds automatically from the scores you log — top two (highlighted) qualify. No manual entry needed.</p>
+        <GroupTables table={table} />
       </div>
 
       <div className="card">
