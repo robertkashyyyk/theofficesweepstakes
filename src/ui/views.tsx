@@ -188,19 +188,22 @@ export function Setup({ config, onGenerate, flash, staffNames = [], type }: {
     onGenerate(Number(fund), prizes, roster);
   };
 
-  const PrizeRow = ({ label, k }: { label: string; k: "finalist" | "groupWinner" | "groupRunnerUp" | "boot" }) => (
-    <div className="prizeset">
-      <span className="ps-label">{label}</span>
-      <div className="ps-controls">
-        <input className="input num2" type="number" min="0" value={prizes[k].value} onChange={(e) => setPrize(k, { value: Number(e.target.value) })} />
-        <div className="seg">
-          <button className={"seg-b" + (prizes[k].mode === "£" ? " on" : "")} onClick={() => setPrize(k, { mode: "£" })}>£</button>
-          <button className={"seg-b" + (prizes[k].mode === "%" ? " on" : "")} onClick={() => setPrize(k, { mode: "%" })}>%</button>
+  const PrizeRow = ({ label, k, count }: { label: string; k: "finalist" | "groupWinner" | "groupRunnerUp" | "boot"; count: number }) => {
+    const unit = toGBP(prizes[k], Number(fund) || 0);
+    return (
+      <div className="prizeset">
+        <span className="ps-label">{label}</span>
+        <div className="ps-controls">
+          <input className="input num2" type="number" min="0" value={prizes[k].value} onChange={(e) => setPrize(k, { value: Number(e.target.value) })} />
+          <div className="seg">
+            <button className={"seg-b" + (prizes[k].mode === "£" ? " on" : "")} onClick={() => setPrize(k, { mode: "£" })}>£</button>
+            <button className={"seg-b" + (prizes[k].mode === "%" ? " on" : "")} onClick={() => setPrize(k, { mode: "%" })}>%</button>
+          </div>
+          <span className="ps-gbp" style={{ minWidth: 160 }}>{money(unit)} each × {count} = {money(unit * count)}</span>
         </div>
-        <span className="ps-gbp">= {money(toGBP(prizes[k], Number(fund) || 0))} each</span>
       </div>
-    </div>
-  );
+    );
+  };
 
   const steps = ["Fund & Players", "Prize amounts", "Review & Generate"];
   const wstep = (i: number, label: string) => (
@@ -249,10 +252,10 @@ export function Setup({ config, onGenerate, flash, staffNames = [], type }: {
               <span className="ps-gbp">× up to {TOTAL_GAMES} = {money((Number(prizes.perGame) || 0) * TOTAL_GAMES)}</span>
             </div>
           </div>
-          <PrizeRow label="🥇 Group winner (×12)" k="groupWinner" />
-          <PrizeRow label="🥈 Group runner-up (×12)" k="groupRunnerUp" />
-          <PrizeRow label="🎽 Reaches the final (×2)" k="finalist" />
-          <PrizeRow label="👟 Golden Boot (×1)" k="boot" />
+          <PrizeRow label="🥇 Group winner" k="groupWinner" count={12} />
+          <PrizeRow label="🥈 Group runner-up" k="groupRunnerUp" count={12} />
+          <PrizeRow label="🎽 Reaches the final" k="finalist" count={2} />
+          <PrizeRow label="👟 Golden Boot" k="boot" count={1} />
           <div className="card subtle" style={{ marginTop: 16, marginBottom: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
               <span className="p small muted" style={{ margin: 0 }}>Committed to small prizes: <b>{money(proj.committed)}</b></span>

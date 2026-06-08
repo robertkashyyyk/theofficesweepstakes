@@ -296,8 +296,9 @@ export default function App() {
     );
   }
 
+  // Player/info tabs only — the Organiser controls live in their own header
+  // button (below), not mixed in with the player-facing tabs.
   const tabs: [Tab, string][] = [["home", "How it works"], ["tickets", "Tickets"], ["daily", "Games"], ["groups", "Groups"], ["board", "Leaderboard"]];
-  if (role === "organiser") tabs.push(["org", "Organiser"]);
 
   return (
     <Shell topbar={<TopBar email={session.user.email ?? ""} isAdmin={isAdmin} onBack={backToDashboard} role={role} />}>
@@ -307,7 +308,14 @@ export default function App() {
             <div className="app-header-title">{bundle.name}</div>
             <div className="app-header-meta">World Cup 2026 · 11 Jun – 19 Jul · 48 teams · 104 games</div>
           </div>
-          <button className="btn ghost sm" style={{ color: "rgba(255,255,255,.85)", borderColor: "rgba(255,255,255,.3)" }} onClick={reload} title="Refresh">⟳ Refresh</button>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            {role === "organiser" && (
+              tab === "org"
+                ? <button className="btn sm" onClick={() => setTab("home")}>← Back to sweep</button>
+                : <button className="btn sm" onClick={() => setTab("org")}>⚙ Organiser</button>
+            )}
+            <button className="btn ghost sm" style={{ color: "rgba(255,255,255,.85)", borderColor: "rgba(255,255,255,.3)" }} onClick={reload} title="Refresh">⟳</button>
+          </div>
         </div>
         <div className="stat-row">
           <div className="stat-tile"><div className="stat-value">{money(Number(config.fund) || 0)}</div><div className="stat-label">Prize fund</div></div>
