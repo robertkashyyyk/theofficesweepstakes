@@ -1,9 +1,10 @@
 /* =========================================================================
    Public marketing homepage — "Office Sweepstakes" (sport-agnostic).
    Not World Cup branded: the World Cup is just one event in the catalogue.
-   Palette stays navy / electric blue / coral (no green-and-gold).
+   Design system: racing green + electric yellow, Barlow (see src/styles.css).
    ========================================================================= */
 import { Link } from "react-router-dom";
+import { Logo } from "./chrome";
 
 type EventCard = {
   emoji: string;
@@ -38,7 +39,7 @@ export default function Landing() {
   return (
     <div className="landing">
       <nav className="lnav">
-        <Link to="/" className="brand">🎟️ Office Sweepstakes</Link>
+        <Link to="/" className="brand logo-mark"><Logo size={24} /> Office Sweepstakes</Link>
         <div className="lnav-r">
           <Link to="/app" className="tab">Sign in</Link>
           <Link to="/app" className="btn">Start a sweepstake</Link>
@@ -110,7 +111,7 @@ export default function Landing() {
       </section>
 
       <footer className="lfoot">
-        <span>🎟️ Office Sweepstakes</span>
+        <span className="logo-mark"><Logo size={20} /> Office Sweepstakes</span>
         <span className="muted">Free, luck-based office sweepstakes for every big sporting event.</span>
       </footer>
     </div>
