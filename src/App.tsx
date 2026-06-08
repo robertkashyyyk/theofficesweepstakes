@@ -362,21 +362,25 @@ function Auth({ flash }: { flash: (m: string) => void }) {
   };
 
   return (
-    <div className="card" style={{ maxWidth: 420, margin: "40px auto" }}>
-      <h2 className="h2">{mode === "in" ? "Sign in" : "Create account"}</h2>
-      <p className="p small">Use your work email. You'll set up your company account next.</p>
-      <div className="stack" style={{ gap: 10 }}>
+    <div className="card" style={{ maxWidth: 440, margin: "48px auto" }}>
+      <div className="seg" style={{ marginBottom: 16 }}>
+        <button className={"seg-b" + (mode === "in" ? " on" : "")} style={{ flex: 1 }} onClick={() => setMode("in")}>Sign in</button>
+        <button className={"seg-b" + (mode === "up" ? " on" : "")} style={{ flex: 1 }} onClick={() => setMode("up")}>Sign up</button>
+      </div>
+      <h2 className="h2">{mode === "in" ? "Welcome back" : "Create your account"}</h2>
+      <p className="p small">
+        {mode === "in"
+          ? "Sign in with your work email."
+          : "Sign up as an organiser — you'll create a company account and can invite colleagues to run sweepstakes with you."}
+      </p>
+      <div className="stack" style={{ gap: 10, marginTop: 4 }}>
         <input className="input" type="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
         <input className="input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()} />
-        <button className="btn big" disabled={busy || !email || !password} onClick={submit}>{mode === "in" ? "Sign in" : "Sign up"}</button>
+        <button className="btn big" disabled={busy || !email || !password} onClick={submit}>
+          {busy ? "…" : mode === "in" ? "Sign in" : "Create account"}
+        </button>
       </div>
-      <p className="muted small" style={{ marginTop: 10 }}>
-        {mode === "in" ? "No account? " : "Already have one? "}
-        <a style={{ color: "var(--cyan)", cursor: "pointer" }} onClick={() => setMode(mode === "in" ? "up" : "in")}>
-          {mode === "in" ? "Create one" : "Sign in"}
-        </a>
-      </p>
     </div>
   );
 }
