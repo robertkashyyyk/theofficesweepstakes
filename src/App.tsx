@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 import {
@@ -206,6 +207,9 @@ export default function App() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="wrap">
+      <div className="app-brandbar">
+        <Link to="/" className="brand small-brand">🎟️ Office Sweepstakes</Link>
+      </div>
       <main>{children}</main>
     </div>
   );
