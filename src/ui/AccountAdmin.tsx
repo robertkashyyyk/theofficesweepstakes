@@ -119,128 +119,84 @@ export function AccountDashboard({
 
   const stepCurrent = sweeps.length > 0 ? 3 : (people?.staff?.length ?? 0) > 0 ? 2 : 1;
 
+  const staff = people?.staff ?? [];
+
   return (
     <div className="stack" style={{ gap: 16 }}>
       <Stepper steps={["Account", "Staff", "Sweepstake"]} current={stepCurrent} />
-      <div className="card">
-        <h2 className="h2">{account.name}</h2>
-        <p className="p small muted">
-          You're the <b>{account.role}</b> of this account. Run sweepstakes, keep a reusable staff
-          roster, and invite co-organisers.
-        </p>
-      </div>
-
-      {/* Sweepstakes ---------------------------------------------------- */}
-      <div className="card">
-        <h2 className="h2">Sweepstakes</h2>
-        {sweeps.length === 0 ? (
-          <p className="p small muted">No sweepstakes yet — create your first below.</p>
-        ) : (
-          <div>
-            {sweeps.map((s) => (
-              <div key={s.id} style={rowStyle}>
-                <span>
-                  {s.name}{" "}
-                  <span className={"role-pill" + (s.generated ? " org" : "")}>
-                    {s.generated ? "live" : "draft"}
-                  </span>
-                </span>
-                <button className="btn sm" onClick={() => onOpenSweep(s.id)}>Open</button>
-              </div>
-            ))}
+      <div className="dashboard-layout">
+        {/* main column ------------------------------------------------- */}
+        <div>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <h2 className="h2" style={{ marginBottom: 4 }}>{account.name}</h2>
+            <p className="p small muted" style={{ margin: 0 }}>
+              You're the <b>{account.role}</b> of this account. Create &amp; run sweepstakes; manage your staff on the right.
+            </p>
           </div>
-        )}
-        <div className="join-row" style={{ marginTop: 12, flexWrap: "wrap" }}>
-          <select
-            className="input"
-            style={{ maxWidth: 240 }}
-            value={typeId}
-            onChange={(e) => setTypeId(e.target.value)}
-            disabled={!types.length}
-          >
-            {types.length
-              ? types.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.sport}</option>)
-              : <option value="">No types available</option>}
-          </select>
-          <input
-            className="input"
-            value={newSweep}
-            onChange={(e) => setNewSweep(e.target.value)}
-            placeholder="Sweepstake name (optional)"
-          />
-          <button className="btn" disabled={busy || !types.length} onClick={createSweep}>Create</button>
+
+          <div className="card">
+            <h2 className="h2">Sweepstakes</h2>
+            {sweeps.length === 0 ? (
+              <p className="p small muted">No sweepstakes yet — create your first below.</p>
+            ) : (
+              <div style={{ marginBottom: 4 }}>
+                {sweeps.map((s) => (
+                  <div key={s.id} className="sweep-card">
+                    <div>
+                      <div className="sweep-card-name">{s.name}</div>
+                      <div className="sweep-card-meta"><span className={"badge " + (s.generated ? "badge-live" : "badge-draft")}>{s.generated ? "Live" : "Draft"}</span></div>
+                    </div>
+                    <button className="btn-secondary btn-sm" onClick={() => onOpenSweep(s.id)}>Open</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="join-row" style={{ marginTop: 12, flexWrap: "wrap" }}>
+              <select className="input" style={{ maxWidth: 240 }} value={typeId} onChange={(e) => setTypeId(e.target.value)} disabled={!types.length}>
+                {types.length ? types.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.sport}</option>) : <option value="">No types available</option>}
+              </select>
+              <input className="input" value={newSweep} onChange={(e) => setNewSweep(e.target.value)} placeholder="Sweepstake name (optional)" />
+              <button className="btn" disabled={busy || !types.length} onClick={createSweep}>Create</button>
+            </div>
+            {!staff.length && (
+              <p className="p small" style={{ marginTop: 8, color: "var(--red)" }}>Tip: add your players in the Team Roster (right) before you generate.</p>
+            )}
+          </div>
+
+          {/* Co-organisers */}
+          <div className="card">
+            <h2 className="h2">Co-organisers</h2>
+            <p className="p small muted">Invite colleagues by email — they can run sweepstakes for this account once they sign in.</p>
+            {people?.members?.map((m) => (
+              <div key={m.email} style={rowStyle}><span>{m.email}</span><span className="role-pill org">{m.role}</span></div>
+            ))}
+            {people?.invites?.map((i) => (
+              <div key={i.email} style={rowStyle}><span>{i.email}</span><span className="role-pill">pending</span></div>
+            ))}
+            <div className="join-row" style={{ marginTop: 12 }}>
+              <input className="input" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && invite()} placeholder="colleague@company.com" />
+              <button className="btn secondary" onClick={invite}>Invite</button>
+            </div>
+          </div>
         </div>
-        {types.length > 0 && (
-          <p className="p small muted" style={{ marginTop: 6 }}>
-            Type sets the format &amp; default prizes. Leave the name blank to use the type's name.
-          </p>
-        )}
-      </div>
 
-      {/* Staff roster -------------------------------------------------- */}
-      <div className="card">
-        <h2 className="h2">Staff roster</h2>
-        <p className="p small muted">Reusable names — pull them straight into a draw when you deal the books.</p>
-        {people?.staff?.length ? (
-          <div>
-            {people.staff.map((s) => (
-              <div key={s.id} style={rowStyle}>
-                <span>{s.name}{s.email ? <span className="muted small"> · {s.email}</span> : null}</span>
-                <button className="btn ghost sm" onClick={() => remove(s.id)}>Remove</button>
-              </div>
-            ))}
+        {/* roster sidebar --------------------------------------------- */}
+        <div className="dashboard-sidebar">
+          <div className="sidebar-title"><span>Team Roster</span><span style={{ color: "var(--green)" }}>{staff.length}</span></div>
+          <p className="p small muted" style={{ marginTop: -6 }}>Everyone here gets a ticket book.</p>
+          <div style={{ margin: "10px 0 14px" }}>
+            {staff.length ? staff.map((s) => (
+              <span key={s.id} className="player-chip">
+                <span className="player-avatar">{s.name.slice(0, 1).toUpperCase()}</span>
+                {s.name}
+                <span className="player-x" title="Remove" onClick={() => remove(s.id)}>×</span>
+              </span>
+            )) : <p className="p small muted">No players yet — add your first below.</p>}
           </div>
-        ) : (
-          <p className="p small muted">No staff added yet.</p>
-        )}
-        <div className="join-row" style={{ marginTop: 12 }}>
-          <input
-            className="input"
-            value={staffName}
-            onChange={(e) => setStaffName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addStaffMember()}
-            placeholder="Staff name"
-          />
-          <button className="btn" onClick={addStaffMember}>Add</button>
-        </div>
-      </div>
-
-      {/* Co-organisers ------------------------------------------------- */}
-      <div className="card">
-        <h2 className="h2">Co-organisers</h2>
-        <p className="p small muted">
-          Invite colleagues by email. They can run sweepstakes for this account once they sign in.
-        </p>
-        {people?.members?.length ? (
-          <div>
-            {people.members.map((m) => (
-              <div key={m.email} style={rowStyle}>
-                <span>{m.email}</span>
-                <span className="role-pill org">{m.role}</span>
-              </div>
-            ))}
+          <div className="join-row">
+            <input className="input" value={staffName} onChange={(e) => setStaffName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addStaffMember()} placeholder="Add a player…" />
+            <button className="btn" onClick={addStaffMember}>Add</button>
           </div>
-        ) : null}
-        {people?.invites?.length ? (
-          <div>
-            {people.invites.map((i) => (
-              <div key={i.email} style={rowStyle}>
-                <span>{i.email}</span>
-                <span className="role-pill">pending</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        <div className="join-row" style={{ marginTop: 12 }}>
-          <input
-            className="input"
-            type="email"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && invite()}
-            placeholder="colleague@company.com"
-          />
-          <button className="btn" onClick={invite}>Invite</button>
         </div>
       </div>
     </div>

@@ -33,11 +33,12 @@ import {
   type SweepSummary,
   type SweepstakeType,
 } from "./db/repo";
-import { Board, Home, OrgManage, Pot, Setup, Tickets } from "./ui/views";
+import { money } from "./core";
+import { Board, Home, OrgManage, Setup, Tickets } from "./ui/views";
 import { AccountDashboard } from "./ui/AccountAdmin";
 import { GroupTables } from "./ui/GroupTables";
 import { Games } from "./ui/Games";
-import { Stepper } from "./ui/chrome";
+import { Stepper, Logo } from "./ui/chrome";
 
 const ONBOARD_STEPS = ["Account", "Staff", "Sweepstake"];
 
@@ -300,16 +301,25 @@ export default function App() {
 
   return (
     <Shell topbar={<TopBar email={session.user.email ?? ""} isAdmin={isAdmin} onBack={backToDashboard} role={role} />}>
-      <header className="hero">
-        <div className="hero-tag">Free to enter · Pure luck · {players.length} {players.length === 1 ? "player" : "players"}</div>
-        <h1 className="hero-title">{bundle.name}</h1>
-        <p className="hero-sub">World Cup 2026 · 11 Jun – 19 Jul · 48 teams · 104 games</p>
+      <header className="app-header-band">
+        <div className="app-header-top">
+          <div>
+            <div className="app-header-title">{bundle.name}</div>
+            <div className="app-header-meta">World Cup 2026 · 11 Jun – 19 Jul · 48 teams · 104 games</div>
+          </div>
+          <button className="btn ghost sm" style={{ color: "rgba(255,255,255,.85)", borderColor: "rgba(255,255,255,.3)" }} onClick={reload} title="Refresh">⟳ Refresh</button>
+        </div>
+        <div className="stat-row">
+          <div className="stat-tile"><div className="stat-value">{money(Number(config.fund) || 0)}</div><div className="stat-label">Prize fund</div></div>
+          <div className="stat-tile"><div className="stat-value">{money(scoring.paid)}</div><div className="stat-label">Paid out</div></div>
+          <div className="stat-tile"><div className="stat-value">{money(scoring.jackpot)}</div><div className="stat-label">{results.champion ? "Winner's pot" : "Jackpot"}</div></div>
+          <div className="stat-tile"><div className="stat-value">{players.length}</div><div className="stat-label">Players</div></div>
+        </div>
+        <div className="fund-bar-wrap"><div className="fund-bar" style={{ width: `${(Number(config.fund) || 0) ? Math.min(100, (scoring.paid / (Number(config.fund) || 1)) * 100) : 0}%` }} /></div>
+        <div className="header-tabs">
+          {tabs.map(([id, l]) => <button key={id} className={"htab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>{l}</button>)}
+        </div>
       </header>
-      <Pot config={config} scoring={scoring} results={results} />
-      <nav className="tabs">
-        {tabs.map(([id, l]) => <button key={id} className={"tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>{l}</button>)}
-        <button className="tab ghost" onClick={reload} title="Refresh">⟳</button>
-      </nav>
 
       {!config.generated && tab !== "org" && tab !== "home" ? (
         <div className="card muted">The draw hasn't been set up yet. {role === "organiser" ? "Set it up in the " : "The organiser sets it up in the "}<b>Organiser</b> tab.</div>
@@ -338,7 +348,7 @@ function Shell({ children, topbar }: { children: React.ReactNode; topbar?: React
   return (
     <div className="wrap">
       <div className="app-brandbar">
-        <Link to="/" className="brand small-brand">🎟️ Office Sweepstakes</Link>
+        <Link to="/" className="brand small-brand"><Logo /> Office Sweepstakes</Link>
       </div>
       {topbar}
       <main>{children}</main>
@@ -414,48 +424,50 @@ function Auth({ flash }: { flash: (m: string) => void }) {
   const canSubmit = !busy && emailOk(email) && password.length >= 6;
 
   return (
-    <div className="card" style={{ maxWidth: 440, margin: "48px auto" }}>
-      <div className="seg" style={{ marginBottom: 16 }}>
-        <button className={"seg-b" + (mode === "in" ? " on" : "")} style={{ flex: 1 }} onClick={() => switchMode("in")}>Sign in</button>
-        <button className={"seg-b" + (mode === "up" ? " on" : "")} style={{ flex: 1 }} onClick={() => switchMode("up")}>Sign up</button>
-      </div>
-      <h2 className="h2">{mode === "in" ? "Welcome back" : "Create your account"}</h2>
-      <p className="p small">
-        {mode === "in"
-          ? "Sign in with your work email."
-          : "Sign up as an organiser — you'll create a company account and can invite colleagues to run sweepstakes with you."}
-      </p>
-
-      {msg && (
-        <div
-          className="card"
-          style={{
-            margin: "12px 0 4px", padding: "10px 12px", fontSize: 13,
-            background: msg.kind === "error" ? "rgba(255,71,111,.10)" : "rgba(52,214,255,.10)",
-            borderColor: msg.kind === "error" ? "rgba(255,71,111,.4)" : "rgba(52,214,255,.4)",
-            color: msg.kind === "error" ? "var(--coral)" : "var(--cyan)",
-          }}
-        >
-          {msg.text}
+    <div className="signin-split">
+      <div className="signin-form-panel">
+        <div className="seg" style={{ marginBottom: 20, maxWidth: 240 }}>
+          <button className={"seg-b" + (mode === "in" ? " on" : "")} style={{ flex: 1 }} onClick={() => switchMode("in")}>Sign in</button>
+          <button className={"seg-b" + (mode === "up" ? " on" : "")} style={{ flex: 1 }} onClick={() => switchMode("up")}>Sign up</button>
         </div>
-      )}
+        <h2>{mode === "in" ? "Welcome back" : "Create your account"}</h2>
+        <p className="sub">
+          {mode === "in"
+            ? "Sign in with your work email."
+            : "Sign up as an organiser — you'll create a company account and invite colleagues to run sweepstakes."}
+        </p>
 
-      <div className="stack" style={{ gap: 10, marginTop: 8 }}>
-        <input className="input" type="email" autoComplete="email" placeholder="you@company.com"
-          value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
-        <input className="input" type="password" autoComplete={mode === "in" ? "current-password" : "new-password"}
-          placeholder={mode === "in" ? "Password" : "Create a password (min 6 chars)"}
-          value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
-        <button className="btn big" disabled={!canSubmit} onClick={submit}>
-          {busy ? "Working…" : mode === "in" ? "Sign in" : "Create account"}
-        </button>
+        {msg && (
+          <div className="card" style={{
+            margin: "0 0 16px", padding: "10px 13px", fontSize: 13, boxShadow: "none",
+            background: msg.kind === "error" ? "#FEF2F2" : "var(--greentint)",
+            borderColor: msg.kind === "error" ? "#FECACA" : "#bfe3ce",
+            color: msg.kind === "error" ? "var(--red)" : "var(--green)",
+          }}>{msg.text}</div>
+        )}
+
+        <div className="stack" style={{ gap: 12 }}>
+          <input className="input" type="email" autoComplete="email" placeholder="you@company.com"
+            value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+          <input className="input" type="password" autoComplete={mode === "in" ? "current-password" : "new-password"}
+            placeholder={mode === "in" ? "Password" : "Create a password (min 6 chars)"}
+            value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+          <button className="btn big" disabled={!canSubmit} onClick={submit}>
+            {busy ? "Working…" : mode === "in" ? "Sign in" : "Create account"}
+          </button>
+        </div>
+
+        <p className="muted small" style={{ marginTop: 14 }}>
+          {mode === "in"
+            ? <>New here? <a className="link" onClick={() => switchMode("up")}>Create an account</a></>
+            : <>Already have one? <a className="link" onClick={() => switchMode("in")}>Sign in</a></>}
+        </p>
       </div>
-
-      <p className="muted small" style={{ marginTop: 12 }}>
-        {mode === "in"
-          ? <>New here? <a style={{ color: "var(--cyan)", cursor: "pointer" }} onClick={() => switchMode("up")}>Create an account</a></>
-          : <>Already have one? <a style={{ color: "var(--cyan)", cursor: "pointer" }} onClick={() => switchMode("in")}>Sign in</a></>}
-      </p>
+      <div className="signin-brand-panel">
+        <Logo size={30} />
+        <blockquote style={{ marginTop: 16 }}>Run a <em>free-to-enter</em> office sweepstake for any big event — in minutes.</blockquote>
+        <p>World Cup · Grand National · Wimbledon · F1 · the Masters.</p>
+      </div>
     </div>
   );
 }

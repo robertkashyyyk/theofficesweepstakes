@@ -2,7 +2,7 @@
    Presentational views — ported from world-cup-sweepstake.jsx, retyped against
    the core domain types. Pure display; all data + handlers come from App.
    ========================================================================= */
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
   GROUPS,
   SCORER_POOL,
@@ -135,17 +135,25 @@ export function Tickets({ scoring, config, results }: { scoring: Scoring; config
 export function Board({ scoring, results }: { scoring: Scoring; results: Results }) {
   if (!scoring.ordered.length) return <div className="card muted">No players yet.</div>;
   const list = [...scoring.ordered].sort((a, b) => (scoring.per[b.id]?.total || 0) - (scoring.per[a.id]?.total || 0));
+  const top = scoring.per[list[0]?.id]?.total || 0;
   return (
     <div className="stack">
       {!results.champion && <div className="card subtle"><p className="p small">Live standings. The 🏆 jackpot ({money(scoring.jackpot)}) is shown against whoever holds the eventual champion.</p></div>}
-      <div className="card">
-        <table className="board"><thead><tr><th>#</th><th>Player</th><th style={{ textAlign: "right" }}>Won</th></tr></thead>
-          <tbody>{list.map((p, i) => (
-            <tr key={p.id} className={scoring.championHolder === p.id ? "champ-row" : ""}>
-              <td className="rank">{i + 1}</td><td>{p.name}{scoring.championHolder === p.id && " 🏆"}</td>
-              <td style={{ textAlign: "right", fontWeight: 700 }}>{money(scoring.per[p.id]?.total || 0)}</td>
-            </tr>))}</tbody>
-        </table>
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        {list.map((p, i) => {
+          const won = scoring.per[p.id]?.total || 0;
+          const champ = scoring.championHolder === p.id;
+          return (
+            <div key={p.id} style={{ padding: "12px 16px", borderTop: i ? "1px solid var(--border)" : "none", background: champ ? "var(--greentint)" : "#fff" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "32px 1fr auto", alignItems: "center", gap: 12 }}>
+                <span className="rank" style={{ color: champ ? "var(--green)" : "var(--muted)" }}>{i + 1}</span>
+                <span style={{ fontWeight: 600 }}>{p.name}{champ && " 🏆"}</span>
+                <span style={{ fontWeight: 700, color: "var(--emerald)" }}>{money(won)}</span>
+              </div>
+              <div className="lb-bar-wrap" style={{ marginLeft: 44 }}><div className="lb-bar" style={{ width: `${top ? (won / top) * 100 : 0}%` }} /></div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -162,6 +170,7 @@ export function Setup({ config, onGenerate, flash, staffNames = [], type }: {
   const [fund, setFund] = useState<number | string>(config.fund || 500);
   const [prizes, setPrizes] = useState<Prizes>(config.prizes);
   const [showTest, setShowTest] = useState(false);
+  const [step, setStep] = useState(1);
   const kickoff = type?.startsAt ? new Date(type.startsAt) : null;
   const started = kickoff ? Date.now() >= kickoff.getTime() : false;
 
@@ -193,95 +202,106 @@ export function Setup({ config, onGenerate, flash, staffNames = [], type }: {
     </div>
   );
 
+  const steps = ["Fund & Players", "Prize amounts", "Review & Generate"];
+  const wstep = (i: number, label: string) => (
+    <>
+      <div className={"wizard-step" + (step === i + 1 ? " active" : step > i + 1 ? " done" : "")}>
+        <span className="wizard-num">{step > i + 1 ? "✓" : i + 1}</span>{label}
+      </div>
+      {i < steps.length - 1 && <div className={"wizard-connector" + (step > i + 1 ? " done" : "")} />}
+    </>
+  );
+
   return (
     <div className="stack">
-      <div className="card">
-        <h2 className="h2">1 · Prize fund</h2>
-        <div className="join-row"><span className="prefix">£</span>
-          <input className="input" type="number" min="0" value={fund} onChange={(e) => setFund(e.target.value)} /></div>
-      </div>
+      <div className="wizard-steps">{steps.map((l, i) => <Fragment key={l}>{wstep(i, l)}</Fragment>)}</div>
 
-      <div className="card">
-        <h2 className="h2">2 · Players</h2>
-        <p className="p small muted">
-          Everyone on your <b>staff roster</b> gets a ticket book. Add or remove people on the{" "}
-          <b>Account</b> dashboard — they're saved there, so nothing gets lost.
-        </p>
-        {roster.length ? (
-          <div className="chips" style={{ marginTop: 4 }}>
-            {roster.map((n) => <span key={n} className="chip">{n}</span>)}
+      {step === 1 && (
+        <div className="wizard-panel">
+          <h3>Step 1 — Fund &amp; Players</h3>
+          <div className="form-group">
+            <label className="form-label">Total prize fund</label>
+            <div className="join-row"><span className="prefix">£</span>
+              <input className="input" type="number" min="0" value={fund} onChange={(e) => setFund(e.target.value)} /></div>
           </div>
-        ) : (
-          <p className="p small" style={{ color: "var(--coral)" }}>No staff yet — add at least 2 on the Account dashboard.</p>
-        )}
-        <p className="p small muted" style={{ marginTop: 10 }}><b>{roster.length}</b> player{roster.length === 1 ? "" : "s"} will be dealt in.</p>
-      </div>
-
-      <div className="card">
-        <h2 className="h2">3 · Prize amounts</h2>
-        <p className="p small">Set each as £ or % of the fund. The Winner takes whatever's left.</p>
-        <div className="prizeset">
-          <span className="ps-label">⚽ Daily scoreline (per game)</span>
-          <div className="ps-controls">
-            <span className="prefix sm">£</span>
-            <input className="input num2" type="number" min="0" step="0.5" value={prizes.perGame} onChange={(e) => setPrizes((p) => ({ ...p, perGame: Number(e.target.value) }))} />
-            <span className="ps-gbp">× up to {TOTAL_GAMES} games = up to {money((Number(prizes.perGame) || 0) * TOTAL_GAMES)}</span>
+          <label className="form-label">Players ({roster.length})</label>
+          {roster.length ? (
+            <div className="chips" style={{ marginBottom: 8 }}>{roster.map((n) => <span key={n} className="chip">{n}</span>)}</div>
+          ) : (
+            <p className="p small" style={{ color: "var(--red)" }}>No players yet — add at least 2 in the Team Roster on the Account dashboard.</p>
+          )}
+          <p className="p small muted">Everyone on your staff roster gets a ticket book. Manage players on the Account dashboard — they're saved there.</p>
+          <div className="wizard-foot">
+            <span />
+            <button className="btn" disabled={roster.length < 2 || (Number(fund) || 0) <= 0} onClick={() => setStep(2)}>Next →</button>
           </div>
-        </div>
-        <PrizeRow label="🥇 Group winner (×12)" k="groupWinner" />
-        <PrizeRow label="🥈 Group runner-up (×12)" k="groupRunnerUp" />
-        <PrizeRow label="🎽 Reaches the final (×2)" k="finalist" />
-        <PrizeRow label="👟 Golden Boot (×1)" k="boot" />
-      </div>
-
-      <div className="card">
-        <h2 className="h2">Outcome check</h2>
-        <table className="breakdown">
-          <thead><tr><th>Prize</th><th>Each</th><th>Pays</th><th style={{ textAlign: "right" }}>Total</th></tr></thead>
-          <tbody>
-            {proj.rows.map((r) => (<tr key={r.name}><td>{r.name}</td><td>{money(r.unit)}</td><td className="muted">{r.note}</td><td style={{ textAlign: "right" }}>{money(r.total)}</td></tr>))}
-            <tr className="br-sum"><td>Committed to small prizes</td><td></td><td></td><td style={{ textAlign: "right" }}>{money(proj.committed)}</td></tr>
-            <tr className={"br-win" + (proj.winnerFloor < 0 ? " bad" : "")}><td>🏆 Winner's jackpot (at least)</td><td></td><td className="muted">remainder</td><td style={{ textAlign: "right", fontWeight: 800 }}>{money(Math.max(0, proj.winnerFloor))}</td></tr>
-          </tbody>
-        </table>
-        {proj.winnerFloor < 0
-          ? <p className="p small" style={{ color: "var(--coral)" }}>⚠️ Small prizes commit {money(proj.committed)} — more than the {money(proj.fund)} fund. Trim them or the Winner gets nothing.</p>
-          : <p className="p small">In practice the Winner usually gets <b>more</b> than this: any daily game whose score nobody holds rolls back into the jackpot.</p>}
-      </div>
-
-      {type && (
-        <div className="card">
-          <h2 className="h2">Test Event</h2>
-          <p className="p small">
-            Simulate the whole event with the names &amp; prizes above — see the tickets, group tables,
-            bracket and payouts, and a checklist of anything still missing. Nothing is saved.
-            {kickoff && <> {started ? <b> The event has kicked off — test mode is closed.</b> : <> Available until kickoff: <b>{kickoff.toLocaleDateString()}</b>.</>}</>}
-          </p>
-          {!started && (
-            <button className="btn ghost" onClick={() => setShowTest((s) => !s)}>
-              {showTest ? "Hide test" : "▶ Run a test event"}
-            </button>
-          )}
-          {showTest && !started && (
-            <div style={{ marginTop: 12 }}>
-              <DryRun
-                type={type}
-                organiser
-                roster={roster}
-                fund={Number(fund) || 0}
-                prizes={prizes}
-                onClose={() => setShowTest(false)}
-              />
-            </div>
-          )}
         </div>
       )}
 
-      <div className="card">
-        <h2 className="h2">4 · Generate</h2>
-        <div style={{ marginTop: 4 }}><button className="btn big" disabled={!ready} onClick={doGen}>🎟️ Generate &amp; deal {roster.length} ticket book{roster.length === 1 ? "" : "s"}</button></div>
-        {!ready && <p className="muted small" style={{ marginTop: 8 }}>{roster.length < 2 ? "Add at least 2 staff on the Account dashboard." : "Set a prize fund above £0."}</p>}
-      </div>
+      {step === 2 && (
+        <div className="wizard-panel">
+          <h3>Step 2 — Prize amounts</h3>
+          <div className="prizeset">
+            <span className="ps-label">⚽ Daily scoreline (per game)</span>
+            <div className="ps-controls">
+              <span className="prefix sm">£</span>
+              <input className="input num2" type="number" min="0" step="0.5" value={prizes.perGame} onChange={(e) => setPrizes((p) => ({ ...p, perGame: Number(e.target.value) }))} />
+              <span className="ps-gbp">× up to {TOTAL_GAMES} = {money((Number(prizes.perGame) || 0) * TOTAL_GAMES)}</span>
+            </div>
+          </div>
+          <PrizeRow label="🥇 Group winner (×12)" k="groupWinner" />
+          <PrizeRow label="🥈 Group runner-up (×12)" k="groupRunnerUp" />
+          <PrizeRow label="🎽 Reaches the final (×2)" k="finalist" />
+          <PrizeRow label="👟 Golden Boot (×1)" k="boot" />
+          <div className="card subtle" style={{ marginTop: 16, marginBottom: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span className="p small muted" style={{ margin: 0 }}>Committed to small prizes: <b>{money(proj.committed)}</b></span>
+              <span className="h2" style={{ margin: 0, color: proj.winnerFloor < 0 ? "var(--red)" : "var(--green)" }}>🏆 {money(Math.max(0, proj.winnerFloor))} <span className="p small muted">winner's pot</span></span>
+            </div>
+            {proj.winnerFloor < 0 && <p className="p small" style={{ color: "var(--red)", margin: "8px 0 0" }}>⚠️ Small prizes exceed the fund — trim them or the Winner gets nothing.</p>}
+          </div>
+          <div className="wizard-foot">
+            <button className="btn ghost" onClick={() => setStep(1)}>← Back</button>
+            <button className="btn" onClick={() => setStep(3)}>Next →</button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="wizard-panel">
+          <h3>Step 3 — Review &amp; Generate</h3>
+          <table className="breakdown">
+            <thead><tr><th>Prize</th><th>Each</th><th>Pays</th><th style={{ textAlign: "right" }}>Total</th></tr></thead>
+            <tbody>
+              {proj.rows.map((r) => (<tr key={r.name}><td>{r.name}</td><td>{money(r.unit)}</td><td className="muted">{r.note}</td><td style={{ textAlign: "right" }}>{money(r.total)}</td></tr>))}
+              <tr className="br-sum"><td>Committed to small prizes</td><td></td><td></td><td style={{ textAlign: "right" }}>{money(proj.committed)}</td></tr>
+              <tr className={"br-win" + (proj.winnerFloor < 0 ? " bad" : "")}><td>🏆 Winner's jackpot (at least)</td><td></td><td className="muted">remainder</td><td style={{ textAlign: "right", fontWeight: 800 }}>{money(Math.max(0, proj.winnerFloor))}</td></tr>
+            </tbody>
+          </table>
+
+          {type && (
+            <div style={{ marginTop: 16 }}>
+              {!started ? (
+                <button className="btn secondary" onClick={() => setShowTest((s) => !s)}>{showTest ? "Hide test" : "▶ Run a test event first"}</button>
+              ) : <p className="p small muted">Test mode closed — the event has kicked off.</p>}
+              {kickoff && !started && <span className="p small muted" style={{ marginLeft: 10 }}>Test available until {kickoff.toLocaleDateString()}.</span>}
+              {showTest && !started && (
+                <div style={{ marginTop: 12 }}>
+                  <DryRun type={type} organiser roster={roster} fund={Number(fund) || 0} prizes={prizes} onClose={() => setShowTest(false)} />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="card subtle" style={{ marginTop: 16, marginBottom: 0, borderColor: "#FDE68A", background: "#FFFBEB" }}>
+            <p className="p small" style={{ margin: 0, color: "#92400E" }}>⚠️ Generating deals the books and <b>locks the roster</b> — it can't be undone (only reset). Make sure your {roster.length} players &amp; prizes are right.</p>
+          </div>
+          <div className="wizard-foot">
+            <button className="btn ghost" onClick={() => setStep(2)}>← Back</button>
+            <button className="btn generate" disabled={!ready} onClick={doGen}>🎟️ Generate &amp; deal {roster.length} book{roster.length === 1 ? "" : "s"}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
