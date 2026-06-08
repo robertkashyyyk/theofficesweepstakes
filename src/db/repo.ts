@@ -4,7 +4,7 @@
    besides the React components.
    ========================================================================= */
 import { supabase } from "../lib/supabase";
-import { dealTickets, type Config, type Game, type Player, type Prizes, type Results } from "../core";
+import { dealTickets, type Config, type EngineData, type Game, type Player, type Prizes, type Results } from "../core";
 
 export type Role = "organiser" | "player";
 export type AccountRole = "owner" | "organiser";
@@ -16,6 +16,21 @@ export interface Bundle {
   players: Player[];
   results: Results;
   role: Role;
+  /** Which engine this sweepstake runs (e.g. "tournament"). */
+  engine: string;
+  /** Snapshot of the type's data taken at creation (pools/config). */
+  typeData: EngineData;
+}
+
+/* ---- Phase B: sweepstake-type catalogue ---- */
+export interface SweepstakeType {
+  id: string;
+  name: string;
+  sport: string;
+  engine: string;
+  data: EngineData;
+  defaultPrizes: Prizes;
+  active: boolean;
 }
 
 /* ---- Phase A: tenancy ---- */
@@ -140,6 +155,8 @@ export async function loadBundle(sweepstakeId: string): Promise<Bundle> {
     players: (players ?? []).map(rowToPlayer),
     results,
     role,
+    engine: sweep.engine ?? "tournament",
+    typeData: (sweep.type_data ?? {}) as EngineData,
   };
 }
 
@@ -153,18 +170,83 @@ export async function createAccount(name: string): Promise<string> {
 
 export async function createSweepstake(
   accountId: string,
-  name: string,
-  fund: number,
-  prizes: Prizes
+  typeId: string,
+  name: string
 ): Promise<string> {
   const { data, error } = await supabase.rpc("create_sweepstake", {
     p_account_id: accountId,
+    p_type_id: typeId,
     p_name: name,
-    p_fund: fund,
-    p_prizes: prizes,
   });
   if (error) throw error;
   return data as string;
+}
+
+/* ---- Phase B: sweepstake-type catalogue ---- */
+
+function rowToType(r: any): SweepstakeType {
+  return {
+    id: r.id,
+    name: r.name,
+    sport: r.sport ?? "",
+    engine: r.engine,
+    data: (r.data ?? {}) as EngineData,
+    defaultPrizes: r.default_prizes as Prizes,
+    active: r.active,
+  };
+}
+
+/** Active types, for the organiser's create-sweepstake picker. */
+export async function listSweepstakeTypes(): Promise<SweepstakeType[]> {
+  const { data, error } = await supabase
+    .from("sweepstake_type")
+    .select("*")
+    .eq("active", true)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(rowToType);
+}
+
+/** All types incl. inactive, for the super-admin catalogue. */
+export async function adminListSweepstakeTypes(): Promise<SweepstakeType[]> {
+  const { data, error } = await supabase
+    .from("sweepstake_type")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(rowToType);
+}
+
+/** Create or update a type. Pools live in `data` (managed by the caller; the
+ *  /admin UI edits metadata + totalGames and seeds keep the heavy pools).
+ *  Platform-admin only (enforced by RLS). */
+export async function upsertSweepstakeType(t: {
+  id?: string;
+  name: string;
+  sport: string;
+  engine: string;
+  data: EngineData;
+  defaultPrizes: Prizes;
+  active: boolean;
+}): Promise<void> {
+  const row = {
+    name: t.name,
+    sport: t.sport,
+    engine: t.engine,
+    data: t.data,
+    default_prizes: t.defaultPrizes,
+    active: t.active,
+  };
+  const q = t.id
+    ? supabase.from("sweepstake_type").update(row).eq("id", t.id)
+    : supabase.from("sweepstake_type").insert(row);
+  const { error } = await q;
+  if (error) throw error;
+}
+
+export async function setTypeActive(id: string, active: boolean): Promise<void> {
+  const { error } = await supabase.from("sweepstake_type").update({ active }).eq("id", id);
+  if (error) throw error;
 }
 
 /* ---- account people: staff roster + co-organiser invites ---- */

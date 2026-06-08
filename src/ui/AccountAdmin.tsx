@@ -7,16 +7,17 @@
    keeping Supabase usage out of the pure core.
    ========================================================================= */
 import { useEffect, useState } from "react";
-import { DEFAULT_PRIZES } from "../core";
 import {
   addStaff,
   createSweepstake,
   inviteCoOrganiser,
   listAccountPeople,
+  listSweepstakeTypes,
   removeStaff,
   type Account,
   type AccountPeople,
   type SweepSummary,
+  type SweepstakeType,
 } from "../db/repo";
 
 const rowStyle: React.CSSProperties = {
@@ -42,7 +43,9 @@ export function AccountDashboard({
   flash: (m: string) => void;
 }) {
   const [people, setPeople] = useState<AccountPeople | null>(null);
-  const [newSweep, setNewSweep] = useState("Office Sweepstake");
+  const [types, setTypes] = useState<SweepstakeType[]>([]);
+  const [typeId, setTypeId] = useState("");
+  const [newSweep, setNewSweep] = useState("");
   const [staffName, setStaffName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -56,13 +59,19 @@ export function AccountDashboard({
   };
   useEffect(() => {
     loadPeople();
+    listSweepstakeTypes()
+      .then((ts) => { setTypes(ts); if (ts.length && !typeId) setTypeId(ts[0].id); })
+      .catch((e: any) => flash(e?.message ?? "Couldn't load sweepstake types."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account.id]);
 
   const createSweep = async () => {
+    const chosen = typeId || types[0]?.id;
+    if (!chosen) { flash("No sweepstake type available."); return; }
     setBusy(true);
     try {
-      const id = await createSweepstake(account.id, newSweep.trim() || "Office Sweepstake", 500, DEFAULT_PRIZES);
+      const id = await createSweepstake(account.id, chosen, newSweep.trim());
+      setNewSweep("");
       onSweepsChanged();
       onOpenSweep(id);
       flash("Draft created — set it up in the Organiser tab.");
@@ -137,15 +146,31 @@ export function AccountDashboard({
             ))}
           </div>
         )}
-        <div className="join-row" style={{ marginTop: 12 }}>
+        <div className="join-row" style={{ marginTop: 12, flexWrap: "wrap" }}>
+          <select
+            className="input"
+            style={{ maxWidth: 240 }}
+            value={typeId}
+            onChange={(e) => setTypeId(e.target.value)}
+            disabled={!types.length}
+          >
+            {types.length
+              ? types.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.sport}</option>)
+              : <option value="">No types available</option>}
+          </select>
           <input
             className="input"
             value={newSweep}
             onChange={(e) => setNewSweep(e.target.value)}
-            placeholder="New sweepstake name"
+            placeholder="Sweepstake name (optional)"
           />
-          <button className="btn" disabled={busy} onClick={createSweep}>Create</button>
+          <button className="btn" disabled={busy || !types.length} onClick={createSweep}>Create</button>
         </div>
+        {types.length > 0 && (
+          <p className="p small muted" style={{ marginTop: 6 }}>
+            Type sets the format &amp; default prizes. Leave the name blank to use the type's name.
+          </p>
+        )}
       </div>
 
       {/* Staff roster -------------------------------------------------- */}
