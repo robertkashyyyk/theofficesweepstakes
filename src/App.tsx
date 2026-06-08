@@ -11,64 +11,143 @@ import {
   type Results,
 } from "./core";
 import {
-  createSweepstake,
+  claimMyInvites,
+  createAccount,
   generateSweepstake,
-  getMySweepstakeId,
+  getMyAccount,
+  isPlatformAdmin,
+  listAccountPeople,
+  listSweepstakes,
   loadBundle,
   logGame,
   resetSweepstake,
   saveResultPatch,
   undoLastGame,
+  type Account,
   type Bundle,
   type Role,
+  type SweepSummary,
 } from "./db/repo";
 import { Board, Daily, Home, OrgManage, Pot, Setup, Tickets } from "./ui/views";
+import { AccountDashboard } from "./ui/AccountAdmin";
 
 const EMPTY_CONFIG: Config = { fund: 500, seed: 0, prizes: DEFAULT_PRIZES, generated: false };
 const EMPTY_RESULTS: Results = { games: [], groupFirst: {}, groupSecond: {}, finalists: [], champion: "", topScorer: "" };
 
 type Tab = "home" | "tickets" | "daily" | "board" | "org";
+type Mode = "dashboard" | "sweep";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [tab, setTab] = useState<Tab>("home");
-  const [bundle, setBundle] = useState<Bundle | null>(null);
+
+  const [account, setAccount] = useState<Account | null>(null);
+  const [accountLoading, setAccountLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [sweeps, setSweeps] = useState<SweepSummary[]>([]);
+  const [staffNames, setStaffNames] = useState<string[]>([]);
+
+  const [mode, setMode] = useState<Mode>("dashboard");
   const [sweepstakeId, setSweepstakeId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [bundle, setBundle] = useState<Bundle | null>(null);
+  const [bundleLoading, setBundleLoading] = useState(false);
+
+  const [tab, setTab] = useState<Tab>("home");
   const [toast, setToast] = useState("");
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2800); };
 
   /* ---- auth session ---- */
   useEffect(() => {
-    if (!supabaseConfigured) { setAuthReady(true); setLoading(false); return; }
+    if (!supabaseConfigured) { setAuthReady(true); setAccountLoading(false); return; }
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthReady(true); });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  /* ---- load the user's sweepstake bundle ---- */
-  const reload = useCallback(async () => {
-    if (!session) return;
+  /* ---- pull staff names for the Setup prefill (organiser only) ---- */
+  const refreshStaffNames = useCallback(async (accountId: string) => {
     try {
-      const sid = sweepstakeId ?? (await getMySweepstakeId());
-      setSweepstakeId(sid);
-      if (!sid) { setBundle(null); setLoading(false); return; }
-      const b = await loadBundle(sid);
+      const people = await listAccountPeople(accountId);
+      setStaffNames((people.staff ?? []).map((s) => s.name));
+    } catch { setStaffNames([]); }
+  }, []);
+
+  /* ---- load the user's account + its sweepstakes ---- */
+  const refreshAccount = useCallback(async () => {
+    if (!account) return;
+    const sw = await listSweepstakes(account.id);
+    setSweeps(sw);
+    await refreshStaffNames(account.id);
+  }, [account, refreshStaffNames]);
+
+  useEffect(() => {
+    if (!session) { setAccount(null); setAccountLoading(false); return; }
+    let cancelled = false;
+    (async () => {
+      setAccountLoading(true);
+      try {
+        await claimMyInvites();                 // promote any pending invites to memberships
+        const [acc, admin] = await Promise.all([getMyAccount(), isPlatformAdmin()]);
+        if (cancelled) return;
+        setIsAdmin(admin);
+        setAccount(acc);
+        if (acc) {
+          const sw = await listSweepstakes(acc.id);
+          if (cancelled) return;
+          setSweeps(sw);
+          await refreshStaffNames(acc.id);
+        } else {
+          setSweeps([]); setStaffNames([]);
+        }
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) flash("Couldn't load your account.");
+      } finally {
+        if (!cancelled) setAccountLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [session, refreshStaffNames]);
+
+  /* ---- load one sweepstake's bundle ---- */
+  const reload = useCallback(async () => {
+    if (!sweepstakeId) return;
+    try {
+      const b = await loadBundle(sweepstakeId);
+      setBundle(b);
+    } catch (e) {
+      console.error(e);
+      flash("Couldn't load the sweepstake.");
+    }
+  }, [sweepstakeId]);
+
+  const openSweep = useCallback(async (id: string) => {
+    setSweepstakeId(id);
+    setMode("sweep");
+    setTab("home");
+    setBundle(null);
+    setBundleLoading(true);
+    try {
+      const b = await loadBundle(id);
       setBundle(b);
     } catch (e) {
       console.error(e);
       flash("Couldn't load the sweepstake.");
     } finally {
-      setLoading(false);
+      setBundleLoading(false);
     }
-  }, [session, sweepstakeId]);
+  }, []);
 
-  useEffect(() => { if (session) { setLoading(true); reload(); } }, [session, reload]);
+  const backToDashboard = useCallback(() => {
+    setMode("dashboard");
+    setSweepstakeId(null);
+    setBundle(null);
+    refreshAccount();
+  }, [refreshAccount]);
 
-  /* ---- realtime + poll fallback (§9) ---- */
+  /* ---- realtime + poll fallback (only while viewing a sweep) ---- */
   useEffect(() => {
-    if (!sweepstakeId || tab === "org") return;
+    if (mode !== "sweep" || !sweepstakeId || tab === "org") return;
     const channel = supabase
       .channel(`sweep:${sweepstakeId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "game", filter: `sweepstake_id=eq.${sweepstakeId}` }, () => reload())
@@ -77,7 +156,7 @@ export default function App() {
       .subscribe();
     const poll = setInterval(reload, 25000);
     return () => { supabase.removeChannel(channel); clearInterval(poll); };
-  }, [sweepstakeId, tab, reload]);
+  }, [mode, sweepstakeId, tab, reload]);
 
   const config = bundle?.config ?? EMPTY_CONFIG;
   const players: Player[] = bundle?.players ?? [];
@@ -142,16 +221,16 @@ export default function App() {
     }
   };
 
-  const onCreate = async (name: string) => {
+  const onCreateAccount = async (name: string) => {
     try {
-      const id = await createSweepstake(name || "Office World Cup Sweep", 500, DEFAULT_PRIZES);
-      setSweepstakeId(id);
-      await reload();
-      setTab("org");
-      flash("Draft created — set it up in the Organiser tab.");
+      await createAccount(name || "My Office");
+      const acc = await getMyAccount();
+      setAccount(acc);
+      setMode("dashboard");
+      flash("Account created — add staff and start a sweepstake.");
     } catch (e: any) {
       console.error(e);
-      flash(e?.message ?? "Couldn't create.");
+      flash(e?.message ?? "Couldn't create account.");
     }
   };
 
@@ -159,18 +238,33 @@ export default function App() {
   if (!supabaseConfigured) return <Shell><div className="card warn">⚠️ Supabase isn't configured. Copy <b>.env.example</b> to <b>.env.local</b> and add your project URL + anon key.</div></Shell>;
   if (!authReady) return <Shell><div className="card muted">Loading…</div></Shell>;
   if (!session) return <Shell><Auth flash={flash} /></Shell>;
-  if (loading) return <Shell><div className="card muted">Loading…</div></Shell>;
-  if (!bundle) return <Shell><CreateSweep onCreate={onCreate} email={session.user.email ?? ""} /></Shell>;
+  if (accountLoading) return <Shell><div className="card muted">Loading…</div></Shell>;
+  if (!account) return <Shell topbar={<TopBar email={session.user.email ?? ""} isAdmin={isAdmin} />}><CreateAccount onCreate={onCreateAccount} email={session.user.email ?? ""} /></Shell>;
+
+  /* ---- account dashboard ---- */
+  if (mode === "dashboard") {
+    return (
+      <Shell topbar={<TopBar email={session.user.email ?? ""} isAdmin={isAdmin} />}>
+        <AccountDashboard
+          account={account}
+          sweeps={sweeps}
+          onOpenSweep={openSweep}
+          onSweepsChanged={refreshAccount}
+          flash={flash}
+        />
+        {toast && <div className="toast">{toast}</div>}
+      </Shell>
+    );
+  }
+
+  /* ---- a single sweepstake ---- */
+  if (bundleLoading || !bundle) return <Shell topbar={<TopBar email={session.user.email ?? ""} isAdmin={isAdmin} onBack={backToDashboard} />}><div className="card muted">Loading…</div></Shell>;
 
   const tabs: [Tab, string][] = [["home", "How it works"], ["tickets", "Tickets"], ["daily", "Daily games"], ["board", "Leaderboard"]];
   if (role === "organiser") tabs.push(["org", "Organiser"]);
 
   return (
-    <Shell>
-      <div className="topbar">
-        <span className={"role-pill" + (role === "organiser" ? " org" : "")}>{role === "organiser" ? "Organiser" : "Player"} · {session.user.email}</span>
-        <button className="btn ghost sm" onClick={() => supabase.auth.signOut()}>Sign out</button>
-      </div>
+    <Shell topbar={<TopBar email={session.user.email ?? ""} isAdmin={isAdmin} onBack={backToDashboard} role={role} />}>
       <header className="hero">
         <div className="hero-tag">FREE TO ENTER · PURE LUCK · {players.length} {players.length === 1 ? "PLAYER" : "PLAYERS"}</div>
         <h1 className="hero-title">THE OFFICE<br /><span>WORLD CUP</span> SWEEP</h1>
@@ -193,7 +287,7 @@ export default function App() {
           {tab === "org" && role === "organiser" && (
             config.generated
               ? <OrgManage config={config} results={results} players={players} scoring={scoring} actions={actions} flash={flash} />
-              : <Setup config={config} onGenerate={onGenerate} flash={flash} />
+              : <Setup config={config} onGenerate={onGenerate} flash={flash} staffNames={staffNames} />
           )}
         </main>
       )}
@@ -204,13 +298,27 @@ export default function App() {
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, topbar }: { children: React.ReactNode; topbar?: React.ReactNode }) {
   return (
     <div className="wrap">
       <div className="app-brandbar">
         <Link to="/" className="brand small-brand">🎟️ Office Sweepstakes</Link>
       </div>
+      {topbar}
       <main>{children}</main>
+    </div>
+  );
+}
+
+function TopBar({ email, isAdmin, onBack, role }: { email: string; isAdmin: boolean; onBack?: () => void; role?: Role }) {
+  return (
+    <div className="topbar">
+      {onBack
+        ? <button className="btn ghost sm" onClick={onBack}>← Account</button>
+        : <span className={"role-pill" + (role === "organiser" ? " org" : "")}>{role === "organiser" ? "Organiser" : "Organiser console"}</span>}
+      <span className="muted small" style={{ marginLeft: "auto" }}>{email}</span>
+      {isAdmin && <Link to="/admin" className="btn ghost sm" style={{ marginLeft: 10 }}>Admin</Link>}
+      <button className="btn ghost sm" style={{ marginLeft: 10 }} onClick={() => supabase.auth.signOut()}>Sign out</button>
     </div>
   );
 }
@@ -243,7 +351,7 @@ function Auth({ flash }: { flash: (m: string) => void }) {
   return (
     <div className="card" style={{ maxWidth: 420, margin: "40px auto" }}>
       <h2 className="h2">{mode === "in" ? "Sign in" : "Create account"}</h2>
-      <p className="p small">Use your work email. Roles (organiser vs player) are assigned per sweepstake.</p>
+      <p className="p small">Use your work email. You'll set up your company account next.</p>
       <div className="stack" style={{ gap: 10 }}>
         <input className="input" type="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
         <input className="input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)}
@@ -260,18 +368,18 @@ function Auth({ flash }: { flash: (m: string) => void }) {
   );
 }
 
-/* ---------------------- Create-sweepstake view ------------------------- */
-function CreateSweep({ onCreate, email }: { onCreate: (name: string) => void; email: string }) {
-  const [name, setName] = useState("Office World Cup Sweep");
+/* ---------------------- Create-account view ---------------------------- */
+function CreateAccount({ onCreate, email }: { onCreate: (name: string) => void; email: string }) {
+  const [name, setName] = useState("");
   return (
     <div className="card" style={{ maxWidth: 480, margin: "40px auto" }}>
-      <h2 className="h2">Start a sweepstake</h2>
-      <p className="p small">Signed in as {email}. You'll be the organiser — you can set the fund, add staff and deal the books in the next step.</p>
+      <h2 className="h2">Create your account</h2>
+      <p className="p small">Signed in as {email}. Name your company or office — you'll be its owner, and can add a staff roster, invite co-organisers and run sweepstakes.</p>
       <div className="join-row" style={{ marginTop: 8 }}>
-        <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Sweepstake name" />
-        <button className="btn" onClick={() => onCreate(name)}>Create</button>
+        <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Acme Ltd — London office" />
+        <button className="btn" disabled={!name.trim()} onClick={() => onCreate(name)}>Create</button>
       </div>
-      <p className="muted small" style={{ marginTop: 10 }}>Already part of one? Ask your organiser to add your email as a player — then it'll appear here automatically.</p>
+      <p className="muted small" style={{ marginTop: 10 }}>Invited as a co-organiser? It'll appear here automatically once you sign in with the invited email.</p>
     </div>
   );
 }

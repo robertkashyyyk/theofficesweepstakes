@@ -165,10 +165,11 @@ export function Board({ scoring, results }: { scoring: Scoring; results: Results
 }
 
 /* --------------------------- Setup (organiser) ------------------------- */
-export function Setup({ config, onGenerate, flash }: {
+export function Setup({ config, onGenerate, flash, staffNames = [] }: {
   config: Config;
   onGenerate: (fund: number, prizes: Prizes, names: string[]) => void;
   flash: (m: string) => void;
+  staffNames?: string[];
 }) {
   const [fund, setFund] = useState<number | string>(config.fund || 500);
   const [num, setNum] = useState(20);
@@ -179,6 +180,14 @@ export function Setup({ config, onGenerate, flash }: {
     n = Math.max(2, Math.min(80, Number(n) || 0));
     setNum(n);
     setNames((prev) => Array.from({ length: n }, (_, i) => prev[i] || ""));
+  };
+  const fillFromRoster = () => {
+    const roster = staffNames.filter((n) => n.trim());
+    if (!roster.length) { flash("No staff in the roster yet — add some on the account dashboard."); return; }
+    const n = Math.max(2, Math.min(80, roster.length));
+    setNum(n);
+    setNames(Array.from({ length: n }, (_, i) => roster[i] || ""));
+    flash(`Filled ${n} name${n === 1 ? "" : "s"} from the staff roster.`);
   };
   const setName = (i: number, v: string) => setNames((prev) => prev.map((x, j) => (j === i ? v : x)));
   const setPrize = (key: "finalist" | "groupWinner" | "groupRunnerUp" | "boot", patch: Partial<Prizes["finalist"]>) =>
@@ -219,8 +228,13 @@ export function Setup({ config, onGenerate, flash }: {
 
       <div className="card">
         <h2 className="h2">2 · Staff</h2>
-        <label className="fld" style={{ maxWidth: 180 }}><span>Number of players</span>
-          <input className="input" type="number" min="2" max="80" value={num} onChange={(e) => setCount(Number(e.target.value))} /></label>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+          <label className="fld" style={{ maxWidth: 180 }}><span>Number of players</span>
+            <input className="input" type="number" min="2" max="80" value={num} onChange={(e) => setCount(Number(e.target.value))} /></label>
+          {staffNames.length > 0 && (
+            <button className="btn ghost sm" onClick={fillFromRoster}>Fill from staff roster ({staffNames.length})</button>
+          )}
+        </div>
         <div className="names-grid">
           {names.map((n, i) => (
             <input key={i} className="input" placeholder={`Player ${i + 1}`} value={n} onChange={(e) => setName(i, e.target.value)} />

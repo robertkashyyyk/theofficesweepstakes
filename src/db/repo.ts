@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase";
 import { dealTickets, type Config, type Game, type Player, type Prizes, type Results } from "../core";
 
 export type Role = "organiser" | "player";
+export type AccountRole = "owner" | "organiser";
 
 export interface Bundle {
   sweepstakeId: string;
@@ -15,6 +16,40 @@ export interface Bundle {
   players: Player[];
   results: Results;
   role: Role;
+}
+
+/* ---- Phase A: tenancy ---- */
+export interface Account {
+  id: string;
+  name: string;
+  role: AccountRole; // the signed-in user's role in this account
+}
+export interface StaffRow {
+  id: string;
+  name: string;
+  email: string | null;
+}
+export interface AccountPerson {
+  userId?: string;
+  email: string;
+  role: string;
+}
+export interface AccountPeople {
+  members: AccountPerson[];
+  invites: { email: string; role: string }[];
+  staff: StaffRow[];
+}
+export interface SweepSummary {
+  id: string;
+  name: string;
+  generated: boolean;
+}
+export interface AdminAccount {
+  id: string;
+  name: string;
+  createdAt: string;
+  members: { email: string; role: string }[];
+  sweepstakes: { id: string; name: string; generated: boolean; createdAt: string }[];
 }
 
 /* ---- row mappers ---- */
@@ -36,15 +71,35 @@ function rowToGame(r: any): Game {
 
 /* ---- reads ---- */
 
-/** The first sweepstake the signed-in user belongs to (single-tenant default). */
-export async function getMySweepstakeId(): Promise<string | null> {
+/** Claim any pending co-organiser invites for the signed-in user's email. */
+export async function claimMyInvites(): Promise<void> {
+  const { error } = await supabase.rpc("claim_my_invites");
+  if (error) throw error;
+}
+
+/** The signed-in user's account (Phase A is single-account-per-user). */
+export async function getMyAccount(): Promise<Account | null> {
   const { data, error } = await supabase
-    .from("sweepstake_member")
-    .select("sweepstake_id")
+    .from("account_member")
+    .select("role, account:account_id(id, name)")
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  return data?.sweepstake_id ?? null;
+  if (!data) return null;
+  const acc = (data as any).account;
+  return { id: acc.id, name: acc.name, role: (data as any).role as AccountRole };
+}
+
+/** Sweepstakes under an account that the signed-in user can access (newest first). */
+export async function listSweepstakes(accountId: string): Promise<SweepSummary[]> {
+  const { data, error } = await supabase
+    .from("sweepstake")
+    .select("id, name, generated, created_at")
+    .eq("account_id", accountId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({ id: r.id, name: r.name, generated: r.generated }));
 }
 
 export async function loadBundle(sweepstakeId: string): Promise<Bundle> {
@@ -90,14 +145,68 @@ export async function loadBundle(sweepstakeId: string): Promise<Bundle> {
 
 /* ---- writes (organiser only; enforced by RLS + triggers) ---- */
 
-export async function createSweepstake(name: string, fund: number, prizes: Prizes): Promise<string> {
+export async function createAccount(name: string): Promise<string> {
+  const { data, error } = await supabase.rpc("create_account", { p_name: name });
+  if (error) throw error;
+  return data as string;
+}
+
+export async function createSweepstake(
+  accountId: string,
+  name: string,
+  fund: number,
+  prizes: Prizes
+): Promise<string> {
   const { data, error } = await supabase.rpc("create_sweepstake", {
+    p_account_id: accountId,
     p_name: name,
     p_fund: fund,
     p_prizes: prizes,
   });
   if (error) throw error;
   return data as string;
+}
+
+/* ---- account people: staff roster + co-organiser invites ---- */
+
+export async function listAccountPeople(accountId: string): Promise<AccountPeople> {
+  const { data, error } = await supabase.rpc("list_account_people", { p_account_id: accountId });
+  if (error) throw error;
+  return data as AccountPeople;
+}
+
+export async function addStaff(accountId: string, name: string, email?: string): Promise<void> {
+  const { error } = await supabase
+    .from("staff")
+    .insert({ account_id: accountId, name: name.trim(), email: email?.trim() || null });
+  if (error) throw error;
+}
+
+export async function removeStaff(staffId: string): Promise<void> {
+  const { error } = await supabase.from("staff").delete().eq("id", staffId);
+  if (error) throw error;
+}
+
+export async function inviteCoOrganiser(accountId: string, email: string): Promise<void> {
+  const { error } = await supabase.rpc("invite_co_organiser", {
+    p_account_id: accountId,
+    p_email: email,
+  });
+  if (error) throw error;
+}
+
+/* ---- super-admin (platform owner) read-only overview ---- */
+
+export async function isPlatformAdmin(): Promise<boolean> {
+  const { data, error } = await supabase.rpc("is_platform_admin");
+  if (error) return false;
+  return Boolean(data);
+}
+
+export async function adminOverview(): Promise<AdminAccount[]> {
+  const { data, error } = await supabase.rpc("admin_overview");
+  if (error) throw error;
+  return (data as AdminAccount[]) ?? [];
 }
 
 /**
