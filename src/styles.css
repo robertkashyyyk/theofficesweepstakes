@@ -5,6 +5,13 @@
 :root{--bg:#070b1f;--bg2:#0c1330;--surface:#121a3d;--surface2:#162149;--ink:#eef1ff;--muted:#8a96c8;--line:rgba(255,255,255,.09);--blue:#3d63ff;--cyan:#34d6ff;--coral:#ff476f;--amber:#ffc24a;}
 body{margin:0;min-height:100vh;color:var(--ink);background:radial-gradient(900px 500px at 12% -8%,rgba(61,99,255,.28),transparent 60%),radial-gradient(800px 500px at 95% 4%,rgba(255,71,111,.20),transparent 55%),var(--bg)}
 .wrap{font-family:'Manrope',system-ui,sans-serif;color:var(--ink);min-height:100vh;padding:22px;max-width:1080px;margin:0 auto;}
+.stepper{display:flex;gap:8px;flex-wrap:wrap;margin:0 auto 16px;max-width:480px}
+.step-pill{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--muted);background:var(--surface);border:1px solid var(--line);padding:7px 13px;border-radius:99px}
+.step-pill .step-pill-n{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:99px;background:var(--bg2);font-size:11px}
+.step-pill.on{color:#fff;background:var(--blue);border-color:transparent;box-shadow:0 8px 20px -12px var(--blue)}
+.step-pill.on .step-pill-n{background:rgba(255,255,255,.25)}
+.step-pill.done{color:var(--cyan);border-color:rgba(52,214,255,.4)}
+.step-pill.done .step-pill-n{background:rgba(52,214,255,.15);color:var(--cyan)}
 .hero{text-align:center;padding:14px 0 6px}
 .hero-tag{font-size:11px;letter-spacing:.28em;color:var(--cyan);font-weight:700}
 .hero-title{font-family:'Anton',sans-serif;font-weight:400;line-height:.92;font-size:clamp(40px,9vw,82px);margin:8px 0 6px;text-transform:uppercase}

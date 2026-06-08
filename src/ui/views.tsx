@@ -89,7 +89,7 @@ function TeamLine({ label, teams }: { label: string; teams: string[] }) {
   );
 }
 
-function Ticket({ pl, sc, champ, upcoming, gameNo }: { pl: Player; sc: Scoring["per"][string] | undefined; champ: boolean; upcoming: string; gameNo: number }) {
+function Ticket({ pl, sc, champ, upcoming, gameNo, fixture }: { pl: Player; sc: Scoring["per"][string] | undefined; champ: boolean; upcoming: string; gameNo: number; fixture: string }) {
   const b = sc?.breakdown || {};
   const lines: [string, number][] = ([["Daily", b.daily], ["Group winner", b.groupWinner], ["Runner-up", b.groupRunnerUp], ["Finalist", b.finalist], ["Golden Boot", b.boot], ["🏆 Jackpot", b.jackpot]] as [string, number | undefined][]).filter(([, v]) => v).map(([k, v]) => [k, v as number]);
   return (
@@ -102,7 +102,11 @@ function Ticket({ pl, sc, champ, upcoming, gameNo }: { pl: Player; sc: Scoring["
         <TeamLine label="🥈 Group runner-up" teams={pl.groupRunnerUpTeams} />
         <div className="t-block"><div className="t-lbl">👟 Golden Boot</div>
           <div className="t-scorers">{(pl.bootPlayers || []).map((s) => <span className="t-scorer" key={s}>{s}</span>)}</div></div>
-        <div className="t-block scoreline-now"><div className="t-lbl">⚽ Correct score · game {gameNo}</div><div className="t-pill">{upcoming}</div><span className="rotates">team 1–team 2 · rotates next game</span></div>
+        <div className="t-block scoreline-now">
+          <div className="t-lbl">⚽ Correct score · game {gameNo} · {fixture}</div>
+          <div className="t-pill">{upcoming}</div>
+          <span className="rotates">your scoreline for this game · rotates next game</span>
+        </div>
       </div>
       {lines.length > 0 && <div className="ticket-foot">{lines.map(([k, v]) => <span className="win" key={k}>{k} <b>{money(v)}</b></span>)}</div>}
     </div>
@@ -113,38 +117,16 @@ export function Tickets({ scoring, config, results }: { scoring: Scoring; config
   if (!config.generated) return <div className="card muted">Not generated yet.</div>;
   const ordered = scoring.ordered;
   const nextGame = (results.games || []).length;
+  const fx = groupFixtures(GROUPS)[nextGame];
+  const fixture = fx ? `${fx.home} v ${fx.away}` : "Knockout";
   const list = [...ordered].sort((a, b) => (scoring.per[b.id]?.total || 0) - (scoring.per[a.id]?.total || 0));
   return (
     <div className="tickets-grid">
       {list.map((pl) => {
         const pi = scoring.idx[pl.id];
         const upcoming = scoreFor(config.seed, nextGame, pi);
-        return <Ticket key={pl.id} pl={pl} sc={scoring.per[pl.id]} champ={scoring.championHolder === pl.id} upcoming={upcoming} gameNo={nextGame + 1} />;
+        return <Ticket key={pl.id} pl={pl} sc={scoring.per[pl.id]} champ={scoring.championHolder === pl.id} upcoming={upcoming} gameNo={nextGame + 1} fixture={fixture} />;
       })}
-    </div>
-  );
-}
-
-/* ----------------------------- Daily ----------------------------------- */
-export function Daily({ scoring, config, results }: { scoring: Scoring; config: Config; results: Results }) {
-  const games = results.games || [];
-  const paidGames = scoring.gameWinners.filter((w) => w.length).length;
-  return (
-    <div className="stack">
-      <div className="card">
-        <h2 className="h2">Daily games <span className="muted" style={{ fontWeight: 400 }}>· {games.length} of {TOTAL_GAMES} logged</span></h2>
-        <p className="p small">{paidGames} paid out at {money(config.prizes.perGame)} each; {games.length - paidGames} landed on a scoreline nobody held and rolled into the jackpot.</p>
-      </div>
-      {games.length === 0 ? <div className="card muted">No games logged yet. The organiser logs each 90-minute result in the Organiser tab.</div> :
-        games.map((g, i) => ({ g, i })).reverse().map(({ g, i }) => {
-          const winners = (scoring.gameWinners[i] || []).map((id) => scoring.ordered.find((p) => p.id === id)?.name).filter(Boolean) as string[];
-          return (
-            <div className="card game" key={g.gameIndex}>
-              <div className="game-l"><span className="game-no">#{g.gameIndex + 1}</span><span className="game-score">{g.score}</span><span className="game-label">{g.label || "Match"}</span></div>
-              <div className="game-r">{winners.length ? winners.map((n) => <span className="chip win-chip" key={n}>{n} +{money(config.prizes.perGame / winners.length)}</span>) : <span className="muted">→ jackpot</span>}</div>
-            </div>
-          );
-        })}
     </div>
   );
 }

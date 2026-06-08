@@ -19,6 +19,7 @@ import {
   type SweepSummary,
   type SweepstakeType,
 } from "../db/repo";
+import { Stepper } from "./chrome";
 
 const rowStyle: React.CSSProperties = {
   display: "flex",
@@ -116,8 +117,11 @@ export function AccountDashboard({
     }
   };
 
+  const stepCurrent = sweeps.length > 0 ? 3 : (people?.staff?.length ?? 0) > 0 ? 2 : 1;
+
   return (
     <div className="stack" style={{ gap: 16 }}>
+      <Stepper steps={["Account", "Staff", "Sweepstake"]} current={stepCurrent} />
       <div className="card">
         <h2 className="h2">{account.name}</h2>
         <p className="p small muted">

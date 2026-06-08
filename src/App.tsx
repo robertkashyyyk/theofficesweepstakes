@@ -33,9 +33,13 @@ import {
   type SweepSummary,
   type SweepstakeType,
 } from "./db/repo";
-import { Board, Daily, Home, OrgManage, Pot, Setup, Tickets } from "./ui/views";
+import { Board, Home, OrgManage, Pot, Setup, Tickets } from "./ui/views";
 import { AccountDashboard } from "./ui/AccountAdmin";
 import { GroupTables } from "./ui/GroupTables";
+import { Games } from "./ui/Games";
+import { Stepper } from "./ui/chrome";
+
+const ONBOARD_STEPS = ["Account", "Staff", "Sweepstake"];
 
 const EMPTY_CONFIG: Config = { fund: 500, seed: 0, prizes: DEFAULT_PRIZES, generated: false };
 const EMPTY_RESULTS: Results = { games: [], groupFirst: {}, groupSecond: {}, finalists: [], champion: "", topScorer: "" };
@@ -291,7 +295,7 @@ export default function App() {
     );
   }
 
-  const tabs: [Tab, string][] = [["home", "How it works"], ["tickets", "Tickets"], ["daily", "Daily games"], ["groups", "Groups"], ["board", "Leaderboard"]];
+  const tabs: [Tab, string][] = [["home", "How it works"], ["tickets", "Tickets"], ["daily", "Games"], ["groups", "Groups"], ["board", "Leaderboard"]];
   if (role === "organiser") tabs.push(["org", "Organiser"]);
 
   return (
@@ -313,7 +317,7 @@ export default function App() {
         <main>
           {tab === "home" && <Home config={config} />}
           {tab === "tickets" && <Tickets scoring={scoring} config={config} results={results} />}
-          {tab === "daily" && <Daily scoring={scoring} config={config} results={results} />}
+          {tab === "daily" && <Games scoring={scoring} config={config} results={results} />}
           {tab === "groups" && <GroupTables table={groupTbl} />}
           {tab === "board" && <Board scoring={scoring} results={results} />}
           {tab === "org" && role === "organiser" && (
@@ -460,7 +464,9 @@ function Auth({ flash }: { flash: (m: string) => void }) {
 function CreateAccount({ onCreate, email }: { onCreate: (name: string) => void; email: string }) {
   const [name, setName] = useState("");
   return (
-    <div className="card" style={{ maxWidth: 480, margin: "40px auto" }}>
+    <div style={{ maxWidth: 480, margin: "40px auto" }}>
+      <Stepper steps={ONBOARD_STEPS} current={0} />
+      <div className="card">
       <h2 className="h2">Create your account</h2>
       <p className="p small">Signed in as {email}. Name your company or office — you'll be its owner, and can add a staff roster, invite co-organisers and run sweepstakes.</p>
       <div className="join-row" style={{ marginTop: 8 }}>
@@ -468,6 +474,7 @@ function CreateAccount({ onCreate, email }: { onCreate: (name: string) => void; 
         <button className="btn" disabled={!name.trim()} onClick={() => onCreate(name)}>Create</button>
       </div>
       <p className="muted small" style={{ marginTop: 10 }}>Invited as a co-organiser? It'll appear here automatically once you sign in with the invited email.</p>
+      </div>
     </div>
   );
 }
