@@ -89,7 +89,7 @@ function TeamLine({ label, teams }: { label: string; teams: string[] }) {
   );
 }
 
-function Ticket({ pl, sc, champ, upcoming, gameNo, fixture }: { pl: Player; sc: Scoring["per"][string] | undefined; champ: boolean; upcoming: string; gameNo: number; fixture: string }) {
+function Ticket({ pl, sc, champ, upcoming, gameNo, fixture, over }: { pl: Player; sc: Scoring["per"][string] | undefined; champ: boolean; upcoming: string; gameNo: number; fixture: string; over: boolean }) {
   const b = sc?.breakdown || {};
   const lines: [string, number][] = ([["Daily", b.daily], ["Group winner", b.groupWinner], ["Runner-up", b.groupRunnerUp], ["Finalist", b.finalist], ["Golden Boot", b.boot], ["🏆 Jackpot", b.jackpot]] as [string, number | undefined][]).filter(([, v]) => v).map(([k, v]) => [k, v as number]);
   return (
@@ -102,11 +102,13 @@ function Ticket({ pl, sc, champ, upcoming, gameNo, fixture }: { pl: Player; sc: 
         <TeamLine label="🥈 Group runner-up" teams={pl.groupRunnerUpTeams} />
         <div className="t-block"><div className="t-lbl">👟 Golden Boot</div>
           <div className="t-scorers">{(pl.bootPlayers || []).map((s) => <span className="t-scorer" key={s}>{s}</span>)}</div></div>
-        <div className="t-block scoreline-now">
-          <div className="t-lbl">⚽ Correct score · game {gameNo} · {fixture}</div>
-          <div className="t-pill">{upcoming}</div>
-          <span className="rotates">your scoreline for this game · rotates next game</span>
-        </div>
+        {!over && (
+          <div className="t-block scoreline-now">
+            <div className="t-lbl">⚽ Correct score · game {gameNo} · {fixture}</div>
+            <div className="t-pill">{upcoming}</div>
+            <span className="rotates">your scoreline for this game · rotates next game</span>
+          </div>
+        )}
       </div>
       {lines.length > 0 && <div className="ticket-foot">{lines.map(([k, v]) => <span className="win" key={k}>{k} <b>{money(v)}</b></span>)}</div>}
     </div>
@@ -117,6 +119,7 @@ export function Tickets({ scoring, config, results }: { scoring: Scoring; config
   if (!config.generated) return <div className="card muted">Not generated yet.</div>;
   const ordered = scoring.ordered;
   const nextGame = (results.games || []).length;
+  const over = nextGame >= TOTAL_GAMES; // all games logged — no "upcoming" scoreline
   const fx = groupFixtures(GROUPS)[nextGame];
   const fixture = fx ? `${fx.home} v ${fx.away}` : "Knockout";
   const list = [...ordered].sort((a, b) => (scoring.per[b.id]?.total || 0) - (scoring.per[a.id]?.total || 0));
@@ -125,7 +128,7 @@ export function Tickets({ scoring, config, results }: { scoring: Scoring; config
       {list.map((pl) => {
         const pi = scoring.idx[pl.id];
         const upcoming = scoreFor(config.seed, nextGame, pi);
-        return <Ticket key={pl.id} pl={pl} sc={scoring.per[pl.id]} champ={scoring.championHolder === pl.id} upcoming={upcoming} gameNo={nextGame + 1} fixture={fixture} />;
+        return <Ticket key={pl.id} pl={pl} sc={scoring.per[pl.id]} champ={scoring.championHolder === pl.id} upcoming={upcoming} gameNo={nextGame + 1} fixture={fixture} over={over} />;
       })}
     </div>
   );
