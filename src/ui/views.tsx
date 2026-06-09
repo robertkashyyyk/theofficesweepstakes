@@ -23,6 +23,7 @@ import {
 } from "../core";
 import { GroupTables } from "./GroupTables";
 import { DryRun } from "./DryRun";
+import { PrintTickets } from "./PrintTickets";
 import type { SweepstakeType } from "../db/repo";
 
 const groupOf = (t: string) => coreGroupOf(t, GROUPS);
@@ -338,7 +339,7 @@ export function Setup({ config, onGenerate, flash, staffNames = [], type }: {
 }
 
 /* --------------------------- OrgManage --------------------------------- */
-export function OrgManage({ config, results, players, scoring, actions, flash }: {
+export function OrgManage({ config, results, players, scoring, actions, flash, eventName }: {
   config: Config;
   results: Results;
   players: Player[];
@@ -352,10 +353,11 @@ export function OrgManage({ config, results, players, scoring, actions, flash }:
     reset: () => Promise<void>;
   };
   flash: (m: string) => void;
+  eventName: string;
 }) {
   void players;
-  void scoring;
   const [a, setA] = useState<number | string>(0), [b, setB] = useState<number | string>(0), [label, setLabel] = useState("");
+  const [showPrint, setShowPrint] = useState(false);
   const games = results.games || [];
   const fixtures = useMemo(() => groupFixtures(GROUPS), []);
   const table = useMemo(() => groupTable(GROUPS, games), [games]);
@@ -371,6 +373,11 @@ export function OrgManage({ config, results, players, scoring, actions, flash }:
   return (
     <div className="stack">
       <OrganiserGuide />
+      {showPrint && <PrintTickets scoring={scoring} config={config} eventName={eventName} onClose={() => setShowPrint(false)} />}
+      <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div><b>Ticket books dealt to {scoring.ordered.length} players.</b> <span className="muted small">Print them or Save-as-PDF to hand out / email.</span></div>
+        <button className="btn secondary" onClick={() => setShowPrint(true)}>🖨 Print tickets</button>
+      </div>
       <div className="card">
         <h2 className="h2">Log a game · {money(config.prizes.perGame)} each</h2>
         {nextFix ? (

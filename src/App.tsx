@@ -342,7 +342,7 @@ export default function App() {
           {tab === "board" && <Board scoring={scoring} results={results} />}
           {tab === "org" && role === "organiser" && (
             config.generated
-              ? <OrgManage config={config} results={results} players={players} scoring={scoring} actions={actions} flash={flash} />
+              ? <OrgManage config={config} results={results} players={players} scoring={scoring} actions={actions} flash={flash} eventName={bundle.name} />
               : <Setup config={config} onGenerate={onGenerate} flash={flash} staffNames={staffNames} type={sweepType} />
           )}
         </main>
