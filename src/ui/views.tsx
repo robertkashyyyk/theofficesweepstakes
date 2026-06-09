@@ -45,37 +45,40 @@ export function Pot({ config, scoring, results }: { config: Config; scoring: Sco
 
 /* ------------------------------ Home ----------------------------------- */
 export function Home({ config }: { config: Config }) {
+  const gen = config.generated;
   const fund = Number(config.fund) || 0;
   const P = config.prizes;
   const f = toGBP(P.finalist, fund), gw = toGBP(P.groupWinner, fund), gru = toGBP(P.groupRunnerUp, fund), boot = toGBP(P.boot, fund);
+  const amt = (v: number, suffix = "") => gen ? `${money(v)}${suffix}` : "set at setup";
   const rows: [string, string, string][] = [
-    ["⚽ Correct score", `${money(P.perGame)} a game`, "Every game you're dealt a fresh correct-score ticket — team 1 (listed first) then team 2 — and it rotates each match. Match the exact 90-min score in fixture order and you win (split if more than one of you holds it). Scores nobody holds roll into the jackpot."],
-    ["🥇 Group winner", `${money(gw)} each`, "Each of your group-winner team tickets that tops its group."],
-    ["🥈 Group runner-up", `${money(gru)} each`, "Each of your runner-up team tickets that finishes 2nd."],
-    ["🎽 Reaches the final", `${money(f)} each`, "Each of your finalist tickets that makes the final."],
-    ["👟 Golden Boot", `${money(boot)}`, "Hold the tournament's top scorer."],
-    ["🏆 World Cup Winner", "The jackpot", "Hold the team that lifts the cup — take everything left in the fund."],
+    ["⚽ Correct score", gen ? `${money(P.perGame)} a game` : "per game", "Every game you're dealt a fresh correct-score ticket — team 1 (listed first) then team 2 — and it rotates each match. Match the exact 90-min score in fixture order and you win (split if more than one holds it). Scores nobody holds roll into the jackpot."],
+    ["🥇 Group winner", amt(gw, " each"), "Each of your group-winner team tickets that tops its group."],
+    ["🥈 Group runner-up", amt(gru, " each"), "Each of your runner-up team tickets that finishes 2nd."],
+    ["🎽 Reaches the final", amt(f, " each"), "Each of your finalist tickets that makes the final."],
+    ["👟 Golden Boot", amt(boot), "Hold the tournament's top scorer."],
+    ["🏆 Champion", "The jackpot", "Hold the team that lifts the cup — take everything left in the pot."],
   ];
   return (
     <div className="stack">
       <div className="card">
         <h2 className="h2">A ticket book each — and something every day</h2>
-        <p className="p">There's no picking and no skill. The organiser deals everyone a <b>book of tickets</b>: separate teams for the Winner, the Finalists, Group winners and Group runners-up, a clutch of Golden Boot players, and a <b>fresh scoreline for every single game</b>.</p>
-        <p className="p">Because each market is dealt on its own and balanced by value, nobody ends up with a dud hand — if you miss out on a big-ticket draw you get extra smaller tickets to make up for it. And with a rotating scoreline every match, you've got a live shot at {money(P.perGame)} on all 104 games.</p>
+        <p className="p">There's no picking and no skill. The organiser deals everyone a <b>book of tickets</b>: separate teams for the Winner, the Finalists, Group winners and Group runners-up, a clutch of Golden Boot players, and a <b>fresh scoreline for every game</b>.</p>
+        <p className="p">Each market is dealt on its own and balanced by value, so nobody ends up with a dud hand — miss out on a big-ticket draw and you're topped up with smaller ones. With a rotating scoreline every match, everyone has a live shot {gen ? <>at <b>{money(P.perGame)}</b></> : "at a cash prize"} on all 104 games.</p>
       </div>
       <div className="card">
-        <h2 className="h2">How the {money(fund)} pays out</h2>
+        <h2 className="h2">{gen ? <>How the {money(fund)} pot pays out</> : "How the pot pays out"}</h2>
+        {!gen && <p className="p small muted">Exact amounts show once the organiser sets the fund &amp; prizes in setup.</p>}
         <div className="prizes">
-          {rows.map(([t, amt, d]) => (
+          {rows.map(([t, a, d]) => (
             <div className="prize" key={t}>
-              <div className="prize-top"><span className="prize-name">{t}</span><span className="prize-amt">{amt}</span></div>
+              <div className="prize-top"><span className="prize-name">{t}</span><span className="prize-amt">{a}</span></div>
               <div className="prize-desc">{d}</div>
             </div>
           ))}
         </div>
-        <p className="p small">The fund is self-balancing: small wins draw it down live and the champion's holder takes the remainder. Unheld scorelines flow back into that jackpot.</p>
+        <p className="p small">The pot is self-balancing: small wins draw it down live and the champion's holder takes the remainder. Unheld scorelines flow back into the jackpot.</p>
       </div>
-      <div className="card subtle"><p className="p small"><b>Note:</b> a free-to-enter, luck-based office draw — a straightforward sweepstake rather than anything needing a licence. General info, not legal advice; your HR/finance team can confirm it's fine to run.</p></div>
+      <div className="card subtle"><p className="p small"><b>Note:</b> a luck-based office draw — a sweepstake, not a betting product. General info, not legal advice; your HR/finance team can confirm it's fine to run.</p></div>
     </div>
   );
 }
@@ -162,6 +165,27 @@ export function Board({ scoring, results }: { scoring: Scoring; results: Results
   );
 }
 
+/* --------------------------- Organiser guide --------------------------- */
+export function OrganiserGuide() {
+  const steps = [
+    <>Add your people in the <b>Team Roster</b> on the Account dashboard — everyone there gets a ticket book.</>,
+    <>Create a sweepstake and pick the event (e.g. World Cup 2026).</>,
+    <>Set the <b>prize fund</b> and prize amounts in the 3-step setup.</>,
+    <>Optionally run a <b>Test Event</b> to preview the whole thing first.</>,
+    <><b>Generate &amp; deal</b> — this locks the roster and deals everyone's tickets (can't be undone, only reset).</>,
+    <>Log each game's score <b>in order</b> — the next fixture is shown, and the group tables build automatically.</>,
+    <>Enter the knockout results as they happen; the <b>champion's holder takes the remaining pot</b>.</>,
+  ];
+  return (
+    <details className="card subtle" style={{ marginBottom: 14 }}>
+      <summary className="h2" style={{ cursor: "pointer", margin: 0, fontSize: "1.1rem" }}>📋 How to run this — organiser guide</summary>
+      <ol style={{ margin: "12px 0 0", paddingLeft: 20, display: "flex", flexDirection: "column", gap: 7 }}>
+        {steps.map((s, i) => <li key={i} className="p small" style={{ margin: 0 }}>{s}</li>)}
+      </ol>
+    </details>
+  );
+}
+
 /* --------------------------- Setup (organiser) ------------------------- */
 export function Setup({ config, onGenerate, flash, staffNames = [], type }: {
   config: Config;
@@ -220,6 +244,7 @@ export function Setup({ config, onGenerate, flash, staffNames = [], type }: {
 
   return (
     <div className="stack">
+      <OrganiserGuide />
       <div className="wizard-steps">{steps.map((l, i) => <Fragment key={l}>{wstep(i, l)}</Fragment>)}</div>
 
       {step === 1 && (
@@ -345,6 +370,7 @@ export function OrgManage({ config, results, players, scoring, actions, flash }:
 
   return (
     <div className="stack">
+      <OrganiserGuide />
       <div className="card">
         <h2 className="h2">Log a game · {money(config.prizes.perGame)} each</h2>
         {nextFix ? (

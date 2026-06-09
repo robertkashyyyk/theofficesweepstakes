@@ -38,6 +38,7 @@ import { Board, Home, OrgManage, Setup, Tickets } from "./ui/views";
 import { AccountDashboard } from "./ui/AccountAdmin";
 import { GroupTables } from "./ui/GroupTables";
 import { Games } from "./ui/Games";
+import { Schedule } from "./ui/Schedule";
 import { Stepper, Logo } from "./ui/chrome";
 
 const ONBOARD_STEPS = ["Account", "Staff", "Sweepstake"];
@@ -45,7 +46,7 @@ const ONBOARD_STEPS = ["Account", "Staff", "Sweepstake"];
 const EMPTY_CONFIG: Config = { fund: 500, seed: 0, prizes: DEFAULT_PRIZES, generated: false };
 const EMPTY_RESULTS: Results = { games: [], groupFirst: {}, groupSecond: {}, finalists: [], champion: "", topScorer: "" };
 
-type Tab = "home" | "tickets" | "daily" | "groups" | "board" | "org";
+type Tab = "home" | "tickets" | "daily" | "sched" | "groups" | "board" | "org";
 type Mode = "dashboard" | "sweep";
 
 export default function App() {
@@ -298,7 +299,7 @@ export default function App() {
 
   // Player/info tabs only — the Organiser controls live in their own header
   // button (below), not mixed in with the player-facing tabs.
-  const tabs: [Tab, string][] = [["home", "How it works"], ["tickets", "Tickets"], ["daily", "Games"], ["groups", "Groups"], ["board", "Leaderboard"]];
+  const tabs: [Tab, string][] = [["home", "How it works"], ["tickets", "Tickets"], ["daily", "Games"], ["sched", "Schedule"], ["groups", "Groups"], ["board", "Leaderboard"]];
 
   return (
     <Shell topbar={<TopBar email={session.user.email ?? ""} isAdmin={isAdmin} onBack={backToDashboard} role={role} />}>
@@ -329,13 +330,14 @@ export default function App() {
         </div>
       </header>
 
-      {!config.generated && tab !== "org" && tab !== "home" ? (
+      {!config.generated && tab !== "org" && tab !== "home" && tab !== "sched" ? (
         <div className="card muted">The draw hasn't been set up yet. {role === "organiser" ? "Set it up in the " : "The organiser sets it up in the "}<b>Organiser</b> tab.</div>
       ) : (
         <main>
           {tab === "home" && <Home config={config} />}
           {tab === "tickets" && <Tickets scoring={scoring} config={config} results={results} />}
           {tab === "daily" && <Games scoring={scoring} config={config} results={results} />}
+          {tab === "sched" && <Schedule groups={GROUPS} games={results.games} />}
           {tab === "groups" && <GroupTables table={groupTbl} />}
           {tab === "board" && <Board scoring={scoring} results={results} />}
           {tab === "org" && role === "organiser" && (
@@ -346,7 +348,7 @@ export default function App() {
         </main>
       )}
 
-      <footer className="foot">Free office sweepstake · all amounts editable in the Organiser tab.</footer>
+      <footer className="foot">Office sweepstake · all amounts editable in the Organiser tab.</footer>
       {toast && <div className="toast">{toast}</div>}
     </Shell>
   );
@@ -473,7 +475,7 @@ function Auth({ flash }: { flash: (m: string) => void }) {
       </div>
       <div className="signin-brand-panel">
         <Logo size={30} />
-        <blockquote style={{ marginTop: 16 }}>Run a <em>free-to-enter</em> office sweepstake for any big event — in minutes.</blockquote>
+        <blockquote style={{ marginTop: 16 }}>Run a <em>luck-based</em> office sweepstake for any big event — in minutes.</blockquote>
         <p>World Cup · Grand National · Wimbledon · F1 · the Masters.</p>
       </div>
     </div>

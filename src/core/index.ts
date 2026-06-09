@@ -7,4 +7,5 @@ export * from "./dealing";
 export * from "./scoring";
 export * from "./bracket";
 export * from "./groupStage";
+export * from "./schedule";
 export * from "./engines";

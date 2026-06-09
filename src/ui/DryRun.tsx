@@ -35,8 +35,9 @@ import { Board, Pot, Tickets } from "./views";
 import { Bracket } from "./Bracket";
 import { GroupTables } from "./GroupTables";
 import { Games } from "./Games";
+import { Schedule } from "./Schedule";
 
-type Tab = "board" | "groups" | "bracket" | "tickets" | "daily";
+type Tab = "board" | "groups" | "bracket" | "tickets" | "daily" | "sched";
 const DUMMY_COUNT = 20;
 
 const prizesConfigured = (p: Prizes) =>
@@ -110,7 +111,7 @@ export function DryRun({
     return { results, config, scoring, bracket, table };
   }, [canSim, nonce, names, fund, prizes, groups, scorerPool, totalGames]);
 
-  const tabs: [Tab, string][] = [["board", "Leaderboard"], ["groups", "Groups"], ["bracket", "Bracket"], ["tickets", "Tickets"], ["daily", "Games"]];
+  const tabs: [Tab, string][] = [["board", "Leaderboard"], ["groups", "Groups"], ["bracket", "Bracket"], ["sched", "Schedule"], ["tickets", "Tickets"], ["daily", "Games"]];
   const title = organiser ? `Test Event · ${type.name}` : `Dry run · ${type.name}`;
 
   return (
@@ -161,6 +162,7 @@ export function DryRun({
           </nav>
           {tab === "board" && <Board scoring={sim.scoring} results={sim.results} />}
           {tab === "groups" && <GroupTables table={sim.table} />}
+          {tab === "sched" && <Schedule groups={groups} games={sim.results.games} />}
           {tab === "bracket" && <Bracket bracket={sim.bracket} />}
           {tab === "tickets" && <Tickets scoring={sim.scoring} config={sim.config} results={sim.results} />}
           {tab === "daily" && <Games scoring={sim.scoring} config={sim.config} results={sim.results} />}

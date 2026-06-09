@@ -29,7 +29,7 @@ const STEPS = [
 ];
 
 const FEATURES = [
-  ["🎟️", "Free to enter, pure luck", "No skill, no predictions. Everyone's dealt tickets — it's the office draw, done properly."],
+  ["🎟️", "Pure luck, no skill", "No predictions, no skill. Everyone's dealt tickets — it's the office draw, done properly."],
   ["⚖️", "Fair by design", "Tickets are value-equalised: miss a big-ticket draw and you're topped up with smaller ones."],
   ["💷", "A self-balancing pot", "Every small win draws the fund down live; the overall winner scoops the remainder."],
   ["🔁", "Reuse your team", "Set your staff up once, then run a new sweepstake for every big event through the year."],
@@ -47,7 +47,7 @@ export default function Landing() {
       </nav>
 
       <header className="lhero">
-        <div className="hero-tag">FREE TO ENTER · PURE LUCK · ANY SPORT</div>
+        <div className="hero-tag">PURE LUCK · ANY BIG EVENT</div>
         <h1 className="lhero-title">THE OFFICE SWEEPSTAKE<br /><span>FOR EVERY BIG EVENT</span></h1>
         <p className="lhero-sub">
           The office draw your team actually looks forward to — for the World Cup, the National, the Six
@@ -57,7 +57,7 @@ export default function Landing() {
           <Link to="/app" className="btn big">Start your sweepstake</Link>
           <a href="#events" className="btn ghost big">See what's on</a>
         </div>
-        <p className="muted small" style={{ marginTop: 14 }}>Free, luck-based office fun — not a betting product. Your HR/finance team can confirm it's fine to run.</p>
+        <p className="muted small" style={{ marginTop: 14 }}>A luck-based office draw — a sweepstake, not a betting product. Your HR/finance team can confirm it's fine to run.</p>
       </header>
 
       <section className="lsection">
@@ -106,13 +106,13 @@ export default function Landing() {
 
       <section className="lcta">
         <h2 className="lh2">Get your office in on it</h2>
-        <p className="lsection-sub">Start a free account, set up your first sweepstake and deal your team in today.</p>
+        <p className="lsection-sub">Set up your first sweepstake and deal your team in today.</p>
         <Link to="/app" className="btn big">Start a sweepstake</Link>
       </section>
 
       <footer className="lfoot">
         <span className="logo-mark"><Logo size={20} /> Office Sweepstakes</span>
-        <span className="muted">Free, luck-based office sweepstakes for every big sporting event.</span>
+        <span className="muted">Luck-based office sweepstakes for every big sporting event.</span>
       </footer>
     </div>
   );
